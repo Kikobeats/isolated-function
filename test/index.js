@@ -51,3 +51,11 @@ test('runs async code', async t => {
 
   t.is(await fn(100), 'done')
 })
+
+test('throw errors', async t => {
+  const fn = createFunction(() => {
+    throw new TypeError('oops')
+  })
+
+  await t.throwsAsync(fn(), { message: 'oops' })
+})

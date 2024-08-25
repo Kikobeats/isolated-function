@@ -8,6 +8,8 @@ const acorn = require('acorn')
 const $ = require('tinyspawn')
 const path = require('path')
 
+const generateTemplate = require('./template')
+
 // Function to detect require and import statements using acorn
 const detectDependencies = code => {
   const dependencies = new Set()
@@ -32,12 +34,6 @@ const detectDependencies = code => {
   })
 
   return Array.from(dependencies)
-}
-
-const generateTemplate = snippet => {
-  const isFunction = typeof snippet === 'function'
-  const value = isFunction ? `await (${snippet.toString()})(...arguments)` : snippet
-  return `;(async () => { setResult({ value: ${value} }) })()`
 }
 
 module.exports = async snippet => {

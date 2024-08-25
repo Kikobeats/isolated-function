@@ -17,18 +17,19 @@
   },
   "keywords": [],
   "dependencies": {
-    "cjs-module-lexer": "~1.3.1",
+    "acorn": "~8.12.1",
+    "acorn-walk": "~8.3.3",
+    "ensure-error": "~3.0.1",
+    "esbuild": "~0.23.1",
+    "serialize-error": "8",
     "v8-sandbox": "~3.2.12"
   },
   "devDependencies": {
     "@commitlint/cli": "latest",
     "@commitlint/config-conventional": "latest",
     "@ksmithut/prettier-standard": "latest",
-    "acorn": "~8.12.1",
-    "acorn-walk": "~8.3.3",
     "ava": "latest",
     "c8": "latest",
-    "esbuild": "~0.23.1",
     "finepack": "latest",
     "git-authors-cli": "latest",
     "github-generate-release": "latest",
