@@ -1,5 +1,6 @@
 'use strict'
 
+const { execSync } = require('child_process')
 const walk = require('acorn-walk')
 const esbuild = require('esbuild')
 const fs = require('fs/promises')
@@ -9,6 +10,15 @@ const $ = require('tinyspawn')
 const path = require('path')
 
 const generateTemplate = require('./template')
+
+const packageManager = (() => {
+  try {
+    execSync('which pnpm').toString().trim()
+    return { init: 'pnpm init', install: 'pnpm install' }
+  } catch {
+    return { init: 'npm init --yes', install: 'npm install' }
+  }
+})()
 
 // Function to detect require and import statements using acorn
 const detectDependencies = code => {
@@ -46,7 +56,8 @@ module.exports = async snippet => {
   await fs.writeFile(entryFile, template)
 
   const dependencies = detectDependencies(template)
-  await $(`pnpm init && pnpm install ${dependencies.join(' ')}`, { cwd: tmp })
+  await $(packageManager.init, { cwd: tmp })
+  await $(`${packageManager.install} ${dependencies.join(' ')}`, { cwd: tmp })
 
   const result = await esbuild.build({
     entryPoints: [entryFile],
