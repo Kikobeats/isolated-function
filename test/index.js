@@ -2,38 +2,38 @@
 
 const test = require('ava')
 
-const createFunction = require('../src')
+const runSandbox = require('../src')
 
 test('runs plain javascript', async t => {
   {
-    const sum = createFunction(() => 2 + 2)
+    const sum = runSandbox(() => 2 + 2)
     t.is(await sum(), 4)
   }
 
   {
-    const sum = createFunction((x, y) => x + y)
+    const sum = runSandbox((x, y) => x + y)
     t.is(await sum(2, 2), 4)
   }
   {
-    const fn = createFunction(() => 2 + 2)
+    const fn = runSandbox(() => 2 + 2)
     t.is(await fn(), 4)
   }
 
   {
-    const fn = createFunction(function () {
+    const fn = runSandbox(function () {
       return 2 + 2
     })
     t.is(await fn(), 4)
   }
 
   {
-    const fn = createFunction('2+2')
+    const fn = runSandbox('2+2')
     t.is(await fn(), 4)
   }
 })
 
 test('resolve require dependencies', async t => {
-  const fn = createFunction(emoji => {
+  const fn = runSandbox(emoji => {
     const isEmoji = require('is-standard-emoji')
     return isEmoji(emoji)
   })
@@ -43,7 +43,7 @@ test('resolve require dependencies', async t => {
 })
 
 test('runs async code', async t => {
-  const fn = createFunction(async duration => {
+  const fn = runSandbox(async duration => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
     await delay(duration)
     return 'done'
@@ -53,9 +53,21 @@ test('runs async code', async t => {
 })
 
 test('throw errors', async t => {
-  const fn = createFunction(() => {
+  const fn = runSandbox(() => {
     throw new TypeError('oops')
   })
 
   await t.throwsAsync(fn(), { message: 'oops' })
+})
+
+test('handle timeout', async t => {
+  const fn = runSandbox(
+    () => {
+      let i = 0
+      while (true) i += 1
+    },
+    { timeout: 100 }
+  )
+
+  await t.throwsAsync(fn(), { message: 'timeout: 100ms' })
 })
