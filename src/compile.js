@@ -44,10 +44,9 @@ module.exports = async snippet => {
 
   const entryFile = path.join(tmp, 'index.js')
   await fs.writeFile(entryFile, template)
-  await $(`pnpm init`, { cwd: tmp })
 
   const dependencies = detectDependencies(template)
-  await $(`pnpm install ${dependencies.join(' ')}`, { cwd: tmp })
+  await $(`pnpm init && pnpm install ${dependencies.join(' ')}`, { cwd: tmp })
 
   const result = await esbuild.build({
     entryPoints: [entryFile],
