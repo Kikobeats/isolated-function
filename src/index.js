@@ -5,18 +5,16 @@ const { deserializeError } = require('serialize-error')
 
 const compile = require('./compile')
 
-module.exports = (
-  snippet,
-  {
-    timeout = 10000,
-    globals = {}
-  } = {}
-) => {
+module.exports = (snippet, { timeout = 10000, globals = {} } = {}) => {
   if (typeof snippet !== 'function') {
     throw new TypeError('Expected a function')
   }
 
-  const sandbox = new Sandbox({ httpEnabled: false, timersEnabled: false, debug: true })
+  const sandbox = new Sandbox({
+    httpEnabled: false,
+    timersEnabled: true,
+    debug: true
+  })
   const compiling = compile(snippet)
   const initializing = sandbox.initialize()
 
