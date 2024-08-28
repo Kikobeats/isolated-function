@@ -3,6 +3,10 @@
   "description": "Runs arbitrary code safely in a Node.js sandbox.",
   "homepage": "https://github.com/microlinkhq/run-sandbox",
   "version": "0.0.0",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "author": {
     "email": "hello@microlink.io",
     "name": "microlink.io",
@@ -15,7 +19,12 @@
   "bugs": {
     "url": "https://github.com/microlinkhq/run-sandbox/issues"
   },
-  "keywords": [],
+  "keywords": [
+    "javascript",
+    "js",
+    "sandbox",
+    "v8"
+  ],
   "dependencies": {
     "acorn": "~8.12.1",
     "acorn-walk": "~8.3.3",
@@ -45,6 +54,9 @@
   "engines": {
     "node": ">= 18"
   },
+  "files": [
+    "src"
+  ],
   "scripts": {
     "clean": "rm -rf node_modules",
     "contributors": "(npx git-authors-cli && npx finepack && git add package.json && git commit -m 'build: contributors' --no-verify) || true",
@@ -70,9 +82,6 @@
         0
       ]
     }
-  },
-  "exports": {
-    ".": "./src/index.js"
   },
   "nano-staged": {
     "*.js": [

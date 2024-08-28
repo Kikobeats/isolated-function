@@ -14,6 +14,10 @@ module.exports = (
     globals = {}
   } = {}
 ) => {
+  if (typeof snippet !== 'function') {
+    throw new TypeError('Expected a function')
+  }
+
   const sandbox = new Sandbox({ httpEnabled, timersEnabled, debug: true })
   const compiling = compile(snippet)
   const initializing = sandbox.initialize()
