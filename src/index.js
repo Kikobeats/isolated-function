@@ -9,8 +9,6 @@ module.exports = (
   snippet,
   {
     timeout = 10000,
-    httpEnabled = false,
-    timersEnabled = true,
     globals = {}
   } = {}
 ) => {
@@ -18,7 +16,7 @@ module.exports = (
     throw new TypeError('Expected a function')
   }
 
-  const sandbox = new Sandbox({ httpEnabled, timersEnabled, debug: true })
+  const sandbox = new Sandbox({ httpEnabled: false, timersEnabled: false, debug: true })
   const compiling = compile(snippet)
   const initializing = sandbox.initialize()
 

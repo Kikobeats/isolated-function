@@ -1,7 +1,7 @@
 {
   "name": "run-sandbox",
-  "description": "Runs arbitrary code safely in a Node.js sandbox.",
-  "homepage": "https://github.com/microlinkhq/run-sandbox",
+  "description": "Runs untrusted code in a Node.js v8 sandbox.",
+  "homepage": "https://github.com/Kikobeats/run-sandbox",
   "version": "0.0.0",
   "main": "src/index.js",
   "exports": {
@@ -14,12 +14,13 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/microlinkhq/run-sandbox.git"
+    "url": "git+https://github.com/Kikobeats/run-sandbox.git"
   },
   "bugs": {
-    "url": "https://github.com/microlinkhq/run-sandbox/issues"
+    "url": "https://github.com/Kikobeats/run-sandbox/issues"
   },
   "keywords": [
+    "isolated",
     "javascript",
     "js",
     "sandbox",
