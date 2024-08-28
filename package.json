@@ -2,7 +2,7 @@
   "name": "run-sandbox",
   "description": "Runs untrusted code in a Node.js v8 sandbox.",
   "homepage": "https://github.com/Kikobeats/run-sandbox",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js"
