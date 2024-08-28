@@ -12,6 +12,12 @@
     "name": "microlink.io",
     "url": "https://microlink.io"
   },
+  "contributors": [
+    {
+      "name": "Kiko Beats",
+      "email": "josefrancisco.verdu@gmail.com"
+    }
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Kikobeats/run-sandbox.git"
