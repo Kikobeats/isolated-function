@@ -1,7 +1,7 @@
 {
-  "name": "run-sandbox",
+  "name": "isolated-function",
   "description": "Runs untrusted code in a Node.js v8 sandbox.",
-  "homepage": "https://github.com/Kikobeats/run-sandbox",
+  "homepage": "https://github.com/Kikobeats/isolated-function",
   "version": "0.0.2",
   "main": "src/index.js",
   "exports": {
@@ -20,10 +20,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Kikobeats/run-sandbox.git"
+    "url": "git+https://github.com/Kikobeats/isolated-function.git"
   },
   "bugs": {
-    "url": "https://github.com/Kikobeats/run-sandbox/issues"
+    "url": "https://github.com/Kikobeats/isolated-function/issues"
   },
   "keywords": [
     "isolated",
@@ -37,6 +37,7 @@
     "acorn-walk": "~8.3.3",
     "ensure-error": "~3.0.1",
     "esbuild": "~0.23.1",
+    "process-stats": "~3.7.10",
     "serialize-error": "8",
     "tinyspawn": "~1.3.2",
     "v8-sandbox": "~3.2.12"
