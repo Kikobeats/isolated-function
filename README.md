@@ -128,7 +128,7 @@ console.log(profiling)
 // }
 ```
 
-Each execution has a profile, which helps understand what happened.
+Each execution has a profiling, which helps understand what happened.
 
 ### Resource limits
 
