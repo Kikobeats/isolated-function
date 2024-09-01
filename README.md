@@ -1,10 +1,13 @@
-# isolated-function
+<h3 align="center">
+  <img src="https://github.com/Kikobeats/isolated-function/blob/master/logo.png?raw=true" width="200">
+  <br>
+  <p>isolated-functions</p>
+  <a target="_blank" rel="noopener noreferrer nofollow"><img src="https://img.shields.io/github/tag/Kikobeats/isolated-function.svg?style=flat-square" style="max-width: 100%;"></a>
+<a href="https://coveralls.io/github/Kikobeats/isolated-function" rel="nofollow"><img src="https://img.shields.io/coveralls/Kikobeats/isolated-function.svg?style=flat-square" alt="Coverage Status" style="max-width: 100%;"></a>
+<a href="https://www.npmjs.org/package/isolated-function" rel="nofollow"><img src="https://img.shields.io/npm/dm/isolated-function.svg?style=flat-square" alt="NPM Status" style="max-width: 100%;"></a>
+</h3>
 
-![Last version](https://img.shields.io/github/tag/Kikobeats/isolated-function.svg?style=flat-square)
-[![Coverage Status](https://img.shields.io/coveralls/Kikobeats/isolated-function.svg?style=flat-square)](https://coveralls.io/github/Kikobeats/isolated-function)
-[![NPM Status](https://img.shields.io/npm/dm/isolated-function.svg?style=flat-square)](https://www.npmjs.org/package/isolated-function)
-
-**Highlights**
+## Highlights
 
 - Based in [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
 - Auto install npm dependencies.
