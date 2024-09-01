@@ -41,7 +41,7 @@ npm install isolated-function --save
 
 ## Quickstart
 
-**isolated-functions** is a modern solution for running arbitrary code using Node.js.
+**isolated-function** is a modern solution for running untrusted code in Node.js.
 
 ```js
 const isolatedFunction = require('isolated-function')
@@ -60,11 +60,9 @@ console.log({ value, profiling })
 await teardown()
 ```
 
-The hosted code runs in a separate process with limited permissions, returning the result and profiling the execution.
-
 ### Minimal privilege execution
 
-The hosted code will be executed with minimal privilege. If you exceed your limit, an error will occur.
+The hosted code runs in a separate process, with minimal privilege, using [Node.js permission model API](https://nodejs.org/api/permissions.html#permission-model).
 
 ```js
 const [fn, teardown] = isolatedFunction(() => {
@@ -76,7 +74,7 @@ await fn()
 // => PermissionError: Access to 'FileSystemWrite' has been restricted.
 ```
 
-Any of the following interaction will throw an error:
+If you exceed your limit, an error will occur. Any of the following interaction will throw an error:
 
 - Native modules
 - Child process
@@ -101,11 +99,11 @@ await isEmoji('foo') // => false
 await teardown()
 ```
 
-The dependencies, along with the hosted code, are bundled into a single file that will be evaluated at runtime.
+The dependencies, along with the hosted code, are bundled by [esbuild](https://esbuild.github.io/) into a single file that will be evaluated at runtime.
 
 ### Execution profiling
 
-Any hosted code execution has a profiling associated:
+Any hosted code execution will be run in their own separate process:
 
 ```js
 /** make a function to consume ~128MB */
@@ -129,6 +127,8 @@ console.log(profiling)
 //   duration: 54.98325
 // }
 ```
+
+Each execution has a profile, which helps understand what happened.
 
 ### Resource limits
 
