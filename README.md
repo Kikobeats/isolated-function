@@ -6,8 +6,9 @@
 
 **Highlights**
 
-- Based on [v8-sandbox](https://github.com/fulcrumapp/v8-sandbox).
+- Based in [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
 - Auto install npm dependencies.
+- Memory limit support.
 - Timeout support.
 
 ## Install
@@ -19,10 +20,10 @@ npm install isolated-function --save
 ## Usage
 
 ```js
-const isoaltedFunction = require('isolated-function')
+const isolatedFunction = require('isolated-function')
 
 /* This function will run in a sandbox, in a separate process */
-const sum = isoaltedFunction((y, z) => y + z)
+const sum = isolatedFunction((y, z) => y + z)
 
 /* Interact with it as usual from your main code */
 const result = await sum(3, 2)
@@ -33,7 +34,7 @@ console.log(result)
 You can also use `require' for external dependencies:
 
 ```js
-const isEmoji = isoaltedFunction(emoji => {
+const isEmoji = isolatedFunction(emoji => {
   const isEmoji = require('is-standard-emoji')
   return isEmoji(emoji)
 })
@@ -48,7 +49,7 @@ It's intentionally not possible to expose any Node.js objects or functions direc
 
 ## API
 
-### isoaltedFunction(snippet, [options])
+### isolatedFunction(snippet, [options])
 
 #### snippet
 

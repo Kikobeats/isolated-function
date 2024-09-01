@@ -62,3 +62,45 @@ test('handle OOM', async t => {
   t.is(error.message, 'Out of memory')
   t.is(typeof error.profiling.duration, 'number')
 })
+
+test('handle filesystem permissions', async t => {
+  {
+    const [fn, cleanup] = isolatedFunction(() => {
+      const fs = require('fs')
+      fs.readFileSync('/etc/passwd', 'utf8')
+    })
+
+    t.teardown(cleanup)
+
+    const error = await t.throwsAsync(fn())
+
+    t.is(error.message, "Access to 'FileSystemRead' has been restricted")
+  }
+  {
+    const [fn, cleanup] = isolatedFunction(() => {
+      const fs = require('fs')
+      fs.writeFileSync('/etc/passwd', 'foo')
+    })
+
+    t.teardown(cleanup)
+
+    const error = await t.throwsAsync(fn())
+
+    t.is(error.message, "Access to 'FileSystemWrite' has been restricted")
+  }
+})
+
+test('handle child process', async t => {
+  {
+    const [fn, cleanup] = isolatedFunction(() => {
+      const { execSync } = require('child_process')
+      return execSync('echo hello').toString()
+    })
+
+    t.teardown(cleanup)
+
+    const error = await t.throwsAsync(fn())
+
+    t.is(error.message, "Access to 'ChildProcess' has been restricted")
+  }
+})

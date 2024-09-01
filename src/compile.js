@@ -11,6 +11,8 @@ const path = require('path')
 
 const generateTemplate = require('./template')
 
+const MINIFY = process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
+
 const packageManager = (() => {
   try {
     execSync('which pnpm').toString().trim()
@@ -65,12 +67,10 @@ module.exports = async snippet => {
     cwd: tmp.cwd
   })
 
-  // return tmp
-
   const result = await esbuild.build({
     entryPoints: [tmp.filepath],
     bundle: true,
-    // minify: true,
+    minify: MINIFY,
     write: false,
     platform: 'node'
   })
