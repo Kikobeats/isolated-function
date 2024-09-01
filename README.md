@@ -90,7 +90,7 @@ The hosted code is parsed for detecting `require`/`import` calls and install the
 ```js
 const [isEmoji, teardown] = isolatedFunction(emoji => {
   /* this dependency only exists inside the isolated function */
-  const isEmoji = require('is-standard-emoji')
+  const isEmoji = require('is-standard-emoji@1.0.0') // default is latest
   return isEmoji(emoji)
 })
 

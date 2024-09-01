@@ -33,7 +33,7 @@ test('runs plain javascript', async t => {
 
 test('resolve require dependencies', async t => {
   const [fn, cleanup] = isolatedFunction(emoji => {
-    const isEmoji = require('is-standard-emoji')
+    const isEmoji = require('is-standard-emoji@1.0.0')
     return isEmoji(emoji)
   })
 
