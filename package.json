@@ -33,6 +33,7 @@
     "v8"
   ],
   "dependencies": {
+    "@kikobeats/time-span": "~1.0.5",
     "acorn": "~8.12.1",
     "acorn-walk": "~8.3.3",
     "ensure-error": "~3.0.1",

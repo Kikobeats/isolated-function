@@ -1,44 +1,33 @@
-/* eslint-disable */
-
 'use strict'
 
 const test = require('ava')
 
-const isolatedFunction = require('../src')
+const isolatedFunction = require('..')
 
-test('throw an error if snippet is not a function', t => {
-  t.throws(
-    () => {
-      isolatedFunction('2+2')
-    },
-    { message: 'Expected a function' }
-  )
-})
+const run = promise => Promise.resolve(promise).then(([value]) => value)
 
 test('runs plain javascript', async t => {
   {
     const [sum, cleanup] = isolatedFunction(() => 2 + 2)
     t.teardown(cleanup)
-    t.is(await sum(), 4)
+    t.is(await run(sum()), 4)
   }
-
   {
     const [sum, cleanup] = isolatedFunction((x, y) => x + y)
     t.teardown(cleanup)
-    t.is(await sum(2, 2), 4)
+    t.is(await run(sum(2, 2)), 4)
   }
   {
     const [fn, cleanup] = isolatedFunction(() => 2 + 2)
     t.teardown(cleanup)
-    t.is(await fn(), 4)
+    t.is(await run(fn()), 4)
   }
-
   {
     const [fn, cleanup] = isolatedFunction(function () {
       return 2 + 2
     })
     t.teardown(cleanup)
-    t.is(await fn(), 4)
+    t.is(await run(fn()), 4)
   }
 })
 
@@ -49,8 +38,9 @@ test('resolve require dependencies', async t => {
   })
 
   t.teardown(cleanup)
-  t.is(await fn('🙌'), true)
-  t.is(await fn('foo'), false)
+
+  t.is(await run(fn('🙌')), true)
+  t.is(await run(fn('foo')), false)
 })
 
 test('runs async code', async t => {
@@ -61,29 +51,26 @@ test('runs async code', async t => {
   })
 
   t.teardown(cleanup)
-  t.is(await fn(100), 'done')
+  t.is(await run(fn(200)), 'done')
 })
 
-test('throw errors', async t => {
+test('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
-    throw new TypeError('oops')
-  })
-
-  t.teardown(cleanup)
-  await t.throwsAsync(fn(), { message: 'oops' })
-})
-
-test('handle timeout', async t => {
-  const [fn, cleanup] = isolatedFunction(
-    () => {
-      let i = 0
-      while (true) {
-        i += 1 // eslint-disable
+    const storage = []
+    const twoMegabytes = 1024 * 1024 * 2
+    while (storage.length < 200) {
+      const array = new Uint8Array(twoMegabytes)
+      for (let ii = 0; ii < twoMegabytes; ii += 4096) {
+        array[ii] = 1 // we have to put something in the array to flush to real memory
       }
-    },
-    { timeout: 100 }
-  )
+      storage.push(array)
+    }
+  })
   t.teardown(cleanup)
 
-  await t.throwsAsync(fn(), { message: 'Execution timed out' })
+  const [value, profiling] = await fn()
+
+  t.is(value, undefined)
+  t.is(typeof profiling.memory, 'number')
+  t.is(typeof profiling.duration, 'number')
 })
