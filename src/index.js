@@ -1,32 +1,38 @@
 'use strict'
 
-const { Sandbox } = require('v8-sandbox')
 const { deserializeError } = require('serialize-error')
+const $ = require('tinyspawn')
 
 const compile = require('./compile')
 
-module.exports = (snippet, { timeout = 10000, globals = {} } = {}) => {
-  if (typeof snippet !== 'function') {
-    throw new TypeError('Expected a function')
+class TimeoutError extends Error {
+  constructor (message) {
+    super(message)
+    this.name = 'TimeoutError'
+  }
+}
+
+module.exports = (snippet, { timeout = 0 } = {}) => {
+  if (typeof snippet !== 'function') throw new TypeError('Expected a function')
+  const compilePromise = compile(snippet)
+
+  const fn = async (...args) => {
+    try {
+      const { filepath } = await compilePromise
+      const { stdout } = await $(`node ${filepath} ${JSON.stringify(args)}`, {
+        timeout,
+        killSignal: 'SIGKILL'
+      })
+      const { isFulfilled, value } = JSON.parse(stdout)
+      if (isFulfilled) return value
+      throw deserializeError(value)
+    } catch (error) {
+      if (error.killed) throw new TimeoutError('Execution timed out')
+      throw error
+    }
   }
 
-  const sandbox = new Sandbox({
-    httpEnabled: false,
-    timersEnabled: true,
-    debug: true
-  })
-  const compiling = compile(snippet)
-  const initializing = sandbox.initialize()
+  const cleanup = async () => (await compilePromise).cleanup
 
-  return async (...args) => {
-    const [code] = await Promise.all([compiling, initializing])
-    const { error, value } = await sandbox.execute({
-      code,
-      timeout,
-      globals: { ...globals, arguments: args }
-    })
-    await sandbox.shutdown()
-    if (error) throw require('ensure-error')(deserializeError(error))
-    return value
-  }
+  return [fn, cleanup]
 }

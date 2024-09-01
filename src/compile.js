@@ -46,31 +46,37 @@ const detectDependencies = code => {
   return Array.from(dependencies)
 }
 
+const getTmp = async content => {
+  const cwd = await fs.mkdtemp(path.join(tmpdir(), 'compile-'))
+  await fs.mkdir(cwd, { recursive: true })
+
+  const filepath = path.join(cwd, 'index.js')
+  await fs.writeFile(filepath, content)
+
+  const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
+  return { filepath, cwd, content, cleanup }
+}
+
 module.exports = async snippet => {
-  const tmp = await fs.mkdtemp(path.join(tmpdir(), 'compile-'))
-  await fs.mkdir(tmp, { recursive: true })
+  const tmp = await getTmp(generateTemplate(snippet))
+  const dependencies = detectDependencies(tmp.content)
+  await $(packageManager.init, { cwd: tmp.cwd })
+  await $(`${packageManager.install} ${dependencies.join(' ')}`, {
+    cwd: tmp.cwd
+  })
 
-  const template = generateTemplate(snippet)
-
-  const entryFile = path.join(tmp, 'index.js')
-  await fs.writeFile(entryFile, template)
-
-  const dependencies = detectDependencies(template)
-  await $(packageManager.init, { cwd: tmp })
-  await $(`${packageManager.install} ${dependencies.join(' ')}`, { cwd: tmp })
+  // return tmp
 
   const result = await esbuild.build({
-    entryPoints: [entryFile],
+    entryPoints: [tmp.filepath],
     bundle: true,
+    // minify: true,
     write: false,
     platform: 'node'
   })
 
-  const bundledCode = result.outputFiles[0].text
-
-  await fs.rm(tmp, { recursive: true })
-
-  return bundledCode
+  await tmp.cleanup()
+  return getTmp(result.outputFiles[0].text)
 }
 
 module.exports.detectDependencies = detectDependencies

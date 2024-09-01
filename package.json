@@ -37,10 +37,8 @@
     "acorn-walk": "~8.3.3",
     "ensure-error": "~3.0.1",
     "esbuild": "~0.23.1",
-    "process-stats": "~3.7.10",
     "serialize-error": "8",
-    "tinyspawn": "~1.3.2",
-    "v8-sandbox": "~3.2.12"
+    "tinyspawn": "~1.3.2"
   },
   "devDependencies": {
     "@commitlint/cli": "latest",
