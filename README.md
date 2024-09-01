@@ -1,18 +1,37 @@
 <h3 align="center">
-  <img src="https://github.com/Kikobeats/isolated-function/blob/master/logo.png?raw=true" width="200">
+  <img
+    src="https://github.com/Kikobeats/isolated-function/blob/master/logo.png?raw=true"
+    width="200">
   <br>
-  <p>isolated-functions</p>
-  <a target="_blank" rel="noopener noreferrer nofollow"><img src="https://img.shields.io/github/tag/Kikobeats/isolated-function.svg?style=flat-square" style="max-width: 100%;"></a>
-<a href="https://coveralls.io/github/Kikobeats/isolated-function" rel="nofollow"><img src="https://img.shields.io/coveralls/Kikobeats/isolated-function.svg?style=flat-square" alt="Coverage Status" style="max-width: 100%;"></a>
-<a href="https://www.npmjs.org/package/isolated-function" rel="nofollow"><img src="https://img.shields.io/npm/dm/isolated-function.svg?style=flat-square" alt="NPM Status" style="max-width: 100%;"></a>
+  <p>isolated-function</p>
+  <a target="_blank" rel="noopener noreferrer nofollow"><img
+      src="https://img.shields.io/github/tag/Kikobeats/isolated-function.svg?style=flat-square"
+      style="max-width: 100%;"></a>
+  <a href="https://coveralls.io/github/Kikobeats/isolated-function"
+    rel="nofollow"><img
+      src="https://img.shields.io/coveralls/Kikobeats/isolated-function.svg?style=flat-square"
+      alt="Coverage Status" style="max-width: 100%;"></a>
+  <a href="https://www.npmjs.org/package/isolated-function" rel="nofollow"><img
+      src="https://img.shields.io/npm/dm/isolated-function.svg?style=flat-square"
+      alt="NPM Status" style="max-width: 100%;"></a>
 </h3>
 
-## Highlights
-
-- Based in [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
-- Auto install npm dependencies.
-- Memory limit support.
-- Timeout support.
+- [Install](#install)
+- [Quickstart](#quickstart)
+  - [Minimal privilege execution](#minimal-privilege-execution)
+  - [Auto install dependencies](#auto-install-dependencies)
+  - [Execution profiling](#execution-profiling)
+  - [Resource limits](#resource-limits)
+- [API](#api)
+  - [isolatedFunction(code, \[options\])](#isolatedfunctioncode-options)
+    - [code](#code)
+    - [options](#options)
+      - [timeout](#timeout)
+      - [timeout](#timeout-1)
+  - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
+    - [fn](#fn)
+    - [teardown](#teardown)
+- [License](#license)
 
 ## Install
 
@@ -20,55 +39,169 @@
 npm install isolated-function --save
 ```
 
-## Usage
+## Quickstart
+
+**isolated-functions** is a modern solution for running arbitrary code using Node.js.
 
 ```js
 const isolatedFunction = require('isolated-function')
 
-/* This function will run in a sandbox, in a separate process */
-const sum = isolatedFunction((y, z) => y + z)
+/* create an isolated-function, with resources limitation */
+const [sum, teardown] = isolatedFunction((y, z) => y + z, {
+  memory: 128, // in MB
+  timeout: 10000 // in milliseconds
+})
 
-/* Interact with it as usual from your main code */
-const result = await sum(3, 2)
+/* interact with the isolated-function */
+const [value, profiling] = await sum(3, 2)
+console.log({ value, profiling })
 
-console.log(result)
+/* close resources associated with the isolated-function initialization */
+await teardown()
 ```
 
-You can also use `require' for external dependencies:
+The hosted code runs in a separate process with limited permissions, returning the result and profiling the execution.
+
+### Minimal privilege execution
+
+The hosted code will be executed with minimal privilege. If you exceed your limit, an error will occur.
 
 ```js
-const isEmoji = isolatedFunction(emoji => {
+const [fn, teardown] = isolatedFunction(() => {
+  const fs = require('fs')
+  fs.writeFileSync('/etc/passwd', 'foo')
+})
+
+await fn()
+// => PermissionError: Access to 'FileSystemWrite' has been restricted.
+```
+
+Any of the following interaction will throw an error:
+
+- Native modules
+- Child process
+- Worker Threads
+- Inspector protocol
+- File system access
+- WASI
+
+### Auto install dependencies
+
+The hosted code is parsed for detecting `require`/`import` calls and install these dependencies:
+
+```js
+const [isEmoji, teardown] = isolatedFunction(emoji => {
+  /* this dependency only exists inside the isolated function */
   const isEmoji = require('is-standard-emoji')
   return isEmoji(emoji)
 })
 
 await isEmoji('🙌') // => true
 await isEmoji('foo') // => false
+await teardown()
 ```
 
-The dependencies are bundled with the source code into a single file that is executed in the sandbox.
+The dependencies, along with the hosted code, are bundled into a single file that will be evaluated at runtime.
 
-It's intentionally not possible to expose any Node.js objects or functions directly to the sandbox (such as `process`, or filesystem). This makes it slightly harder to integrate into a project, but has the benefit of guaranteed isolation.
+### Execution profiling
+
+Any hosted code execution has a profiling associated:
+
+```js
+/** make a function to consume ~128MB */
+const [fn, teardown] = isolatedFunction(() => {
+  const storage = []
+  const oneMegabyte = 1024 * 1024
+  while (storage.length < 78) {
+    const array = new Uint8Array(oneMegabyte)
+    for (let ii = 0; ii < oneMegabyte; ii += 4096) {
+      array[ii] = 1
+    }
+    storage.push(array)
+  }
+})
+t.teardown(cleanup)
+
+const [value, profiling] = await fn()
+console.log(profiling)
+// {
+//   memory: 128204800,
+//   duration: 54.98325
+// }
+```
+
+### Resource limits
+
+You can limit a **isolated-function** by memory:
+
+```js
+const [fn, teardown] = isolatedFunction(() => {
+  const storage = []
+  const oneMegabyte = 1024 * 1024
+  while (storage.length < 78) {
+    const array = new Uint8Array(oneMegabyte)
+    for (let ii = 0; ii < oneMegabyte; ii += 4096) {
+      array[ii] = 1
+    }
+    storage.push(array)
+  }
+}, { memory: 64 })
+
+await fn()
+// =>  MemoryError: Out of memory
+```
+
+or by execution duration:
+
+```js
+const [fn, teardown] = isolatedFunction(() => {
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
+  await delay(duration)
+  return 'done'
+}, { timeout: 50 })
+
+await fn(100)
+// =>  TimeoutError: Execution timed out
+```
 
 ## API
 
-### isolatedFunction(snippet, [options])
+### isolatedFunction(code, [options])
 
-#### snippet
+#### code
 
-*Required*<br>
-Type: `string`
+_Required_<br>
+Type: `function`
 
-The source code to run.
+The hosted function to run.
 
 #### options
 
-##### foo
+##### timeout
 
-Type: `boolean`<br>
-Default: `false`
+Type: `number`
 
-Lorem ipsum.
+Timeout after a specified amount of time, in milliseconds.
+
+##### timeout
+
+Type: `number`
+
+Set the functino memory limit, in megabytes.
+
+### => (fn([...args]), teardown())
+
+#### fn
+
+Type: `function`
+
+The isolated function to execute. You can pass arguments over it.
+
+#### teardown
+
+Type: `function`
+
+A function to be called to release resources associated with the **isolated-function**.
 
 ## License
 

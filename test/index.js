@@ -57,11 +57,11 @@ test('runs async code', async t => {
 test('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     const storage = []
-    const twoMegabytes = 1024 * 1024 * 2
-    while (storage.length < 200) {
-      const array = new Uint8Array(twoMegabytes)
-      for (let ii = 0; ii < twoMegabytes; ii += 4096) {
-        array[ii] = 1 // we have to put something in the array to flush to real memory
+    const oneMegabyte = 1024 * 1024
+    while (storage.length < 78) {
+      const array = new Uint8Array(oneMegabyte)
+      for (let i = 0; i < oneMegabyte; i += 4096) {
+        array[i] = 1 // we have to put something in the array to flush to real memory
       }
       storage.push(array)
     }
