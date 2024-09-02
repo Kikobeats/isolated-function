@@ -17,7 +17,7 @@ test('detect requires', t => {
   ])
 })
 
-test.only('detect imports', t => {
+test('detect imports', t => {
   const code = `
     import isEmoji from 'is-standard-emoji@1.0.0';
     import isNumber from 'is-number';
