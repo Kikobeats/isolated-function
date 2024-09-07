@@ -13,6 +13,16 @@ test('runs plain javascript', async t => {
     t.is(await run(sum()), 4)
   }
   {
+    const [sum, cleanup] = isolatedFunction(String(() => 2 + 2))
+    t.teardown(cleanup)
+    t.is(await run(sum()), 4)
+  }
+  {
+    const [sum, cleanup] = isolatedFunction('() => 2 + 2')
+    t.teardown(cleanup)
+    t.is(await run(sum()), 4)
+  }
+  {
     const [sum, cleanup] = isolatedFunction((x, y) => x + y)
     t.teardown(cleanup)
     t.is(await run(sum(2, 2)), 4)

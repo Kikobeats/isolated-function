@@ -21,7 +21,7 @@ const flags = ({ filename, memory }) => {
 }
 
 module.exports = (snippet, { timeout = 0, memory } = {}) => {
-  if (typeof snippet !== 'function') throw new TypeError('Expected a function')
+  if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
   const compilePromise = compile(snippet)
 
   const fn = async (...args) => {

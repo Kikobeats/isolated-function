@@ -4,10 +4,10 @@ const test = require('ava')
 
 const isolatedFunction = require('..')
 
-test('throw an error if snippet is not a function', t => {
+test('throw an error if snippet is not a function or string', t => {
   t.throws(
     () => {
-      isolatedFunction('2+2')
+      isolatedFunction(NaN)
     },
     { message: 'Expected a function' }
   )
