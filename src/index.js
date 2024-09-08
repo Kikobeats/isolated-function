@@ -20,7 +20,7 @@ const flags = ({ filename, memory }) => {
   return flags.join(' ')
 }
 
-module.exports = (snippet, { timeout = 0, memory, throwError = true } = {}) => {
+module.exports = (snippet, { timeout, memory, throwError = true } = {}) => {
   if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
   const compilePromise = compile(snippet)
 

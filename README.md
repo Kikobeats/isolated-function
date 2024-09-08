@@ -22,12 +22,14 @@
   - [Auto install dependencies](#auto-install-dependencies)
   - [Execution profiling](#execution-profiling)
   - [Resource limits](#resource-limits)
+  - [Error handling](#error-handling)
 - [API](#api)
   - [isolatedFunction(code, \[options\])](#isolatedfunctioncode-options)
     - [code](#code)
     - [options](#options)
+      - [memory](#memory)
+      - [throwError](#throwerror)
       - [timeout](#timeout)
-      - [timeout](#timeout-1)
   - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
     - [fn](#fn)
     - [teardown](#teardown)
@@ -164,6 +166,34 @@ await fn(100)
 // =>  TimeoutError: Execution timed out
 ```
 
+### Error handling
+
+Any error during **isolated-function** execution will be propagated:
+
+```js
+const [fn, cleanup] = isolatedFunction(() => {
+  throw new TypeError('oh no!')
+})
+
+const result = await fn()
+// TypeError: oh no!
+```
+
+You can also return the error instead of throwing it with `{ throwError: false }`:
+
+```js
+const [fn, cleanup] = isolatedFunction(() => {
+  throw new TypeError('oh no!')
+})
+
+const { isFullfiled, value } = await fn()
+
+if (!isFufilled) {
+  console.error(value)
+  // TypeError: oh no!
+}
+```
+
 ## API
 
 ### isolatedFunction(code, [options])
@@ -177,17 +207,30 @@ The hosted function to run.
 
 #### options
 
+##### memory
+
+Type: `number`<br>
+Default: `Infinity`
+
+Set the function memory limit, in megabytes.
+
+##### throwError
+
+Type: `boolean`<br>
+Default: `false`
+
+When is `true`, it returns the error rather than throw it.
+
+The error will be accessible against `{ value: error, isFufilled: false }` object.
+
+Set the function memory limit, in megabytes.
+
 ##### timeout
 
-Type: `number`
+Type: `number`<br>
+Default: `Infinity`
 
 Timeout after a specified amount of time, in milliseconds.
-
-##### timeout
-
-Type: `number`
-
-Set the functino memory limit, in megabytes.
 
 ### => (fn([...args]), teardown())
 
