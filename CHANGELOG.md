@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.5 (2024-09-08)
+
+
+### Features
+
+* add throwError ([016a8cb](https://github.com/Kikobeats/isolated-function/commit/016a8cbe7ab3d0b3fd91e0595b9ad205f6ecf720))
+
 ### 0.1.4 (2024-09-07)
 
 ### 0.1.3 (2024-09-07)
