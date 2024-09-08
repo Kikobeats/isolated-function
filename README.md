@@ -53,7 +53,7 @@ const [sum, teardown] = isolatedFunction((y, z) => y + z, {
 })
 
 /* interact with the isolated-function */
-const [value, profiling] = await sum(3, 2)
+const { value, profiling } = await sum(3, 2)
 console.log({ value, profiling })
 
 /* close resources associated with the isolated-function initialization */
@@ -120,7 +120,7 @@ const [fn, teardown] = isolatedFunction(() => {
 })
 t.teardown(cleanup)
 
-const [value, profiling] = await fn()
+const { value, profiling } = await fn()
 console.log(profiling)
 // {
 //   memory: 128204800,

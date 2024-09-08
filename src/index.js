@@ -20,7 +20,7 @@ const flags = ({ filename, memory }) => {
   return flags.join(' ')
 }
 
-module.exports = (snippet, { timeout = 0, memory } = {}) => {
+module.exports = (snippet, { timeout = 0, memory, throwError = true } = {}) => {
   if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
   const compilePromise = compile(snippet)
 
@@ -41,8 +41,9 @@ module.exports = (snippet, { timeout = 0, memory } = {}) => {
       })
       const { isFulfilled, value, profiling } = JSON.parse(stdout)
       profiling.duration = duration()
-      if (isFulfilled) return [value, profiling]
-      throw deserializeError(value)
+      if (isFulfilled) return { isFulfilled, value, profiling }
+      if (throwError) throw deserializeError(value)
+      return { isFulfilled: false, value: deserializeError(value), profiling }
     } catch (error) {
       if (error.signalCode === 'SIGTRAP') {
         throw createError({

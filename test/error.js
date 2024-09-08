@@ -13,13 +13,29 @@ test('throw an error if snippet is not a function or string', t => {
   )
 })
 
-test('throw code errors', async t => {
+test('throw code errors by default', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     throw new TypeError('oops')
   })
 
   t.teardown(cleanup)
   await t.throwsAsync(fn(), { message: 'oops' })
+})
+
+test('pass `throwError: false`', async t => {
+  const [fn, cleanup] = isolatedFunction(
+    () => {
+      throw new TypeError('oops')
+    },
+    { throwError: false }
+  )
+
+  t.teardown(cleanup)
+  const result = await fn()
+
+  t.is(result.isFulfilled, false)
+  t.is(result.value.message, 'oops')
+  t.is(typeof result.profiling, 'object')
 })
 
 test('handle timeout', async t => {

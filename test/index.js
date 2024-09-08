@@ -4,7 +4,7 @@ const test = require('ava')
 
 const isolatedFunction = require('..')
 
-const run = promise => Promise.resolve(promise).then(([value]) => value)
+const run = promise => Promise.resolve(promise).then(({ value }) => value)
 
 test('runs plain javascript', async t => {
   {
@@ -64,7 +64,7 @@ test('runs async code', async t => {
   t.is(await run(fn(200)), 'done')
 })
 
-test('memory profiling', async t => {
+test.only('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     const storage = []
     const oneMegabyte = 1024 * 1024
@@ -78,7 +78,7 @@ test('memory profiling', async t => {
   })
   t.teardown(cleanup)
 
-  const [value, profiling] = await fn()
+  const { value, profiling } = await fn()
 
   t.is(value, undefined)
   t.is(typeof profiling.memory, 'number')
