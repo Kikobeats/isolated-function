@@ -41,6 +41,42 @@ test('runs plain javascript', async t => {
   }
 })
 
+test('capture logs', async t => {
+  const [fn, cleanup] = isolatedFunction(() => {
+    console.log('console.log')
+    console.info('console.info')
+    console.debug('console.debug')
+    console.warn('console.warn')
+    console.error('console.error')
+    return 'done'
+  })
+
+  t.teardown(cleanup)
+
+  const { value, logging } = await fn()
+  t.is(value, 'done')
+  t.deepEqual(logging, {
+    log: ['console.log'],
+    info: ['console.info'],
+    debug: ['console.debug'],
+    warn: ['console.warn'],
+    error: ['console.error']
+  })
+})
+
+test('prevent to write to process.stdout', async t => {
+  const [fn, cleanup] = isolatedFunction(() => {
+    process.stdout.write('disturbing')
+    return 'done'
+  })
+
+  t.teardown(cleanup)
+
+  const { value, logging } = await fn()
+  t.is(value, 'done')
+  t.deepEqual(logging, {})
+})
+
 test('resolve require dependencies', async t => {
   const [fn, cleanup] = isolatedFunction(emoji => {
     const isEmoji = require('is-standard-emoji@1.0.0')
@@ -64,7 +100,7 @@ test('runs async code', async t => {
   t.is(await run(fn(200)), 'done')
 })
 
-test.only('memory profiling', async t => {
+test('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     const storage = []
     const oneMegabyte = 1024 * 1024

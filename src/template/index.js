@@ -2,10 +2,20 @@
 
 const SERIALIZE_ERROR = require('./serialize-error')
 
-const generateTemplate = snippet => `
+module.exports = snippet => `
   const args = JSON.parse(process.argv[2])
 
-  ;(async () => {
+  const logging = Object.create(null)
+
+  for (const method of ['log', 'info', 'debug', 'warn', 'error']) {
+    console[method] = function (...args) {
+      const input = args.join(' ')
+      logging[method] === undefined ? logging[method] = [input] : logging[method].push(input)
+    }
+  }
+
+  ;(async (send) => {
+    process.stdout.write = function () {}
     let value
     let isFulfilled
 
@@ -16,12 +26,11 @@ const generateTemplate = snippet => `
       value = ${SERIALIZE_ERROR}(error)
       isFulfilled = false
     } finally {
-      console.log(JSON.stringify({
+      send(JSON.stringify({
         isFulfilled,
+        logging,
         value,
         profiling: { memory: process.memoryUsage().rss }
       }))
     }
-  })()`
-
-module.exports = generateTemplate
+  })(process.stdout.write.bind(process.stdout))`

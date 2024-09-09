@@ -22,6 +22,7 @@
   - [Auto install dependencies](#auto-install-dependencies)
   - [Execution profiling](#execution-profiling)
   - [Resource limits](#resource-limits)
+  - [Logging](#logging)
   - [Error handling](#error-handling)
 - [API](#api)
   - [isolatedFunction(code, \[options\])](#isolatedfunctioncode-options)
@@ -165,6 +166,32 @@ const [fn, teardown] = isolatedFunction(() => {
 
 await fn(100)
 // =>  TimeoutError: Execution timed out
+```
+
+### Logging
+
+The logs are collected into a `logging` object returned after the execution:
+
+```js
+const [fn, teardown] = isolatedFunction(() => {
+  console.log('console.log')
+  console.info('console.info')
+  console.debug('console.debug')
+  console.warn('console.warn')
+  console.error('console.error')
+  return 'done'
+})
+
+const { logging } await fn()
+
+console.log(logging)
+// {
+//   log: ['console.log'],
+//   info: ['console.info'],
+//   debug: ['console.debug'],
+//   warn: ['console.warn'],
+//   error: ['console.error']
+// }
 ```
 
 ### Error handling

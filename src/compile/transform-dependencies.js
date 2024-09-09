@@ -1,7 +1,7 @@
 'use strict'
 
-const acorn = require('acorn')
 const walk = require('acorn-walk')
+const acorn = require('acorn')
 
 module.exports = code => {
   const ast = acorn.parse(code, { ecmaVersion: 2020, sourceType: 'module' })
