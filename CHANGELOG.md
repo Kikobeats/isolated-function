@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.6 (2024-09-09)
+
+
+### Features
+
+* add scoped packages support ([bda3eab](https://github.com/Kikobeats/isolated-function/commit/bda3eab471956152933e1094dff8795a4587f6ee))
+
 ### 0.1.5 (2024-09-08)
 
 
