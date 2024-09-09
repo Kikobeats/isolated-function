@@ -15,7 +15,11 @@ const createError = ({ name, message, ...props }) => {
 }
 
 const flags = ({ filename, memory }) => {
-  const flags = ['--experimental-permission', `--allow-fs-read=${filename}`]
+  const flags = [
+    '--disable-warning=ExperimentalWarning',
+    '--experimental-permission',
+    `--allow-fs-read=${filename}`
+  ]
   if (memory) flags.push(`--max-old-space-size=${memory}`)
   return flags.join(' ')
 }
@@ -39,11 +43,15 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true } = {}) 
         timeout,
         killSignal: 'SIGKILL'
       })
-      const { isFulfilled, value, profiling } = JSON.parse(stdout)
+      const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
       profiling.duration = duration()
-      if (isFulfilled) return { isFulfilled, value, profiling }
-      if (throwError) throw deserializeError(value)
-      return { isFulfilled: false, value: deserializeError(value), profiling }
+      return isFulfilled
+        ? { isFulfilled, value, profiling, logging }
+        : throwError
+          ? (() => {
+              throw deserializeError(value)
+            })()
+          : { isFulfilled: false, value: deserializeError(value), profiling, logging }
     } catch (error) {
       if (error.signalCode === 'SIGTRAP') {
         throw createError({
