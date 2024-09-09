@@ -3,7 +3,6 @@
 const { execSync } = require('child_process')
 const esbuild = require('esbuild')
 const fs = require('fs/promises')
-const { tmpdir } = require('os')
 const $ = require('tinyspawn')
 const path = require('path')
 
@@ -22,8 +21,10 @@ const packageManager = (() => {
   }
 })()
 
-const getTmp = async content => {
-  const cwd = await fs.mkdtemp(path.join(tmpdir(), 'compile-'))
+const tmpdirDefault = () => fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
+
+const getTmp = async (content, tmpdir) => {
+  const cwd = await tmpdir()
   await fs.mkdir(cwd, { recursive: true })
 
   const filepath = path.join(cwd, 'index.js')
@@ -33,10 +34,10 @@ const getTmp = async content => {
   return { filepath, cwd, content, cleanup }
 }
 
-module.exports = async snippet => {
+module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const compiledTemplate = generateTemplate(snippet)
   const dependencies = detectDependencies(compiledTemplate)
-  const tmp = await getTmp(transformDependencies(compiledTemplate))
+  const tmp = await getTmp(transformDependencies(compiledTemplate), tmpdir)
 
   await $(packageManager.init, { cwd: tmp.cwd })
   await $(`${packageManager.install} ${dependencies.join(' ')}`, {
@@ -52,7 +53,7 @@ module.exports = async snippet => {
   })
 
   await tmp.cleanup()
-  return getTmp(result.outputFiles[0].text)
+  return getTmp(result.outputFiles[0].text, tmpdir)
 }
 
 module.exports.detectDependencies = detectDependencies
