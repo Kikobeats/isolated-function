@@ -30,6 +30,7 @@
       - [memory](#memory)
       - [throwError](#throwerror)
       - [timeout](#timeout)
+      - [tmpdir](#tmpdir)
   - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
     - [fn](#fn)
     - [teardown](#teardown)
@@ -231,6 +232,13 @@ Type: `number`<br>
 Default: `Infinity`
 
 Timeout after a specified amount of time, in milliseconds.
+
+##### tmpdir
+
+Type: `function`<br>
+Default: `fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))`
+
+The temporal folder to use for installing code dependencies.
 
 ### => (fn([...args]), teardown())
 
