@@ -107,6 +107,30 @@ test('runs async code', async t => {
   t.is(await run(fn(200)), 'done')
 })
 
+test('escape arguments', async t => {
+  const [fn, cleanup] = isolatedFunction((...args) => args.length)
+  t.teardown(cleanup)
+
+  const result = await run(
+    fn({
+      device: {
+        userAgent:
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/62.0.3202.89 Safari/537.36',
+        viewport: {
+          width: 1280,
+          height: 800,
+          deviceScaleFactor: 2,
+          isMobile: false,
+          hasTouch: false,
+          isLandscape: false
+        }
+      }
+    })
+  )
+
+  t.is(result, 1)
+})
+
 test('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     const storage = []

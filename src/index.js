@@ -35,11 +35,13 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true } = {}) 
 
       const cwd = path.dirname(filepath)
       const filename = path.basename(filepath)
-      const cmd = `node ${flags({ filename, memory })} ${filename} ${JSON.stringify(args)}`
-
       duration = timeSpan()
-      const { stdout } = await $(cmd, {
+      const { stdout } = await $('node', [filename, JSON.stringify(args)], {
         cwd,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: flags({ filename, memory })
+        },
         timeout,
         killSignal: 'SIGKILL'
       })
