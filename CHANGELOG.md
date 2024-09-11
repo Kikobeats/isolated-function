@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.10 (2024-09-11)
+
+
+### Bug Fixes
+
+* escape arguments ([927f52f](https://github.com/Kikobeats/isolated-function/commit/927f52fe326092c36ca2c06d105339acad35a7c5))
+
 ### 0.1.9 (2024-09-11)
 
 

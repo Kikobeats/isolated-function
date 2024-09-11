@@ -2,7 +2,7 @@
   "name": "isolated-function",
   "description": "Runs untrusted code in a Node.js v8 sandbox.",
   "homepage": "https://github.com/Kikobeats/isolated-function",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js"
