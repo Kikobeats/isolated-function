@@ -9,8 +9,7 @@ module.exports = snippet => `
 
   for (const method of ['log', 'info', 'debug', 'warn', 'error']) {
     console[method] = function (...args) {
-      const input = args.join(' ')
-      logging[method] === undefined ? logging[method] = [input] : logging[method].push(input)
+      logging[method] === undefined ? logging[method] = [args] : logging[method].push(args)
     }
   }
 
