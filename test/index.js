@@ -43,7 +43,7 @@ test('runs plain javascript', async t => {
 
 test('capture logs', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
-    console.log('console.log')
+    console.log('console.log', { foo: 'bar' })
     console.info('console.info')
     console.debug('console.debug')
     console.warn('console.warn')
@@ -56,11 +56,18 @@ test('capture logs', async t => {
   const { value, logging } = await fn()
   t.is(value, 'done')
   t.deepEqual(logging, {
-    log: ['console.log'],
-    info: ['console.info'],
-    debug: ['console.debug'],
-    warn: ['console.warn'],
-    error: ['console.error']
+    log: [
+      [
+        'console.log',
+        {
+          foo: 'bar'
+        }
+      ]
+    ],
+    info: [['console.info']],
+    debug: [['console.debug']],
+    warn: [['console.warn']],
+    error: [['console.error']]
   })
 })
 

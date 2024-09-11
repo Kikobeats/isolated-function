@@ -58,7 +58,6 @@ const [sum, teardown] = isolatedFunction((y, z) => y + z, {
 
 /* interact with the isolated-function */
 const { value, profiling } = await sum(3, 2)
-console.log({ value, profiling })
 
 /* close resources associated with the isolated-function initialization */
 await teardown()
