@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.9 (2024-09-11)
+
+
+### Bug Fixes
+
+* serialize logs ([68a1358](https://github.com/Kikobeats/isolated-function/commit/68a135809c43db224120019f0e0b0074c6f8bda6))
+
 ### 0.1.8 (2024-09-09)
 
 ### 0.1.7 (2024-09-09)
