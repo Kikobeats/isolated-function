@@ -91,10 +91,10 @@ If you exceed your limit, an error will occur. Any of the following interaction 
 The hosted code is parsed for detecting `require`/`import` calls and install these dependencies:
 
 ```js
-const [isEmoji, teardown] = isolatedFunction(emoji => {
+const [isEmoji, teardown] = isolatedFunction(input => {
   /* this dependency only exists inside the isolated function */
   const isEmoji = require('is-standard-emoji@1.0.0') // default is latest
-  return isEmoji(emoji)
+  return isEmoji(input)
 })
 
 await isEmoji('🙌') // => true
