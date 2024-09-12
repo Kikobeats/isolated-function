@@ -1,7 +1,6 @@
 'use strict'
 
 const { deserializeError } = require('serialize-error')
-const serialize = require('serialize-javascript')
 const timeSpan = require('@kikobeats/time-span')()
 const $ = require('tinyspawn')
 const path = require('path')
@@ -37,7 +36,7 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true } = {}) 
       const cwd = path.dirname(filepath)
       const filename = path.basename(filepath)
       duration = timeSpan()
-      const { stdout } = await $('node', [filename, serialize(args)], {
+      const { stdout } = await $('node', [filename, JSON.stringify(args)], {
         cwd,
         env: {
           ...process.env,

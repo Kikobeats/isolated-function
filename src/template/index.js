@@ -3,7 +3,8 @@
 const SERIALIZE_ERROR = require('./serialize-error')
 
 module.exports = snippet => `
-  const args = eval(\`(\${process.argv[2]})\`);
+  const args = JSON.parse(process.argv[2])
+
   const logging = Object.create(null)
 
   for (const method of ['log', 'info', 'debug', 'warn', 'error']) {
