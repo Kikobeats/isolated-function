@@ -131,6 +131,21 @@ test('escape arguments', async t => {
   t.is(result, 1)
 })
 
+test('serialize functions', async t => {
+  const [fn, cleanup] = isolatedFunction(({ response }) => response.ok())
+  t.teardown(cleanup)
+
+  const result = await run(
+    fn({
+      response: {
+        ok: () => true
+      }
+    })
+  )
+
+  t.is(result, true)
+})
+
 test('memory profiling', async t => {
   const [fn, cleanup] = isolatedFunction(() => {
     const storage = []
