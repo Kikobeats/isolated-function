@@ -10,7 +10,15 @@ const transformDependencies = require('./transform-dependencies')
 const detectDependencies = require('./detect-dependencies')
 const generateTemplate = require('../template')
 
-const MINIFY = process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
+const MINIFY = (() => {
+  return process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
+    ? {}
+    : {
+        minifyWhitespace: true,
+        minifyIdentifiers: false,
+        minifySyntax: true
+      }
+})()
 
 const packageManager = (() => {
   try {
@@ -47,7 +55,7 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const result = await esbuild.build({
     entryPoints: [tmp.filepath],
     bundle: true,
-    minify: MINIFY,
+    ...MINIFY,
     write: false,
     platform: 'node'
   })
