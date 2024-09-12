@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.13 (2024-09-12)
+
+
+### Bug Fixes
+
+* preserver names ([d65993f](https://github.com/Kikobeats/isolated-function/commit/d65993f91a186e62a211cc8903f112d3849f8cbe))
+
 ### 0.1.12 (2024-09-12)
 
 ### 0.1.11 (2024-09-12)
