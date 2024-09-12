@@ -23,19 +23,38 @@ test('throw code errors by default', async t => {
 })
 
 test('pass `throwError: false`', async t => {
-  const [fn, cleanup] = isolatedFunction(
-    () => {
-      throw new TypeError('oops')
-    },
-    { throwError: false }
-  )
+  {
+    const [fn, cleanup] = isolatedFunction(
+      () => {
+        throw new TypeError('oops')
+      },
+      { throwError: false }
+    )
 
-  t.teardown(cleanup)
-  const result = await fn()
+    t.teardown(cleanup)
+    const result = await fn()
 
-  t.is(result.isFulfilled, false)
-  t.is(result.value.message, 'oops')
-  t.is(typeof result.profiling, 'object')
+    t.is(result.isFulfilled, false)
+    t.is(result.value.message, 'oops')
+    t.is(result.value.name, 'TypeError')
+    t.is(typeof result.profiling, 'object')
+  }
+  {
+    const [fn, cleanup] = isolatedFunction(
+      () => {
+        throw 'oops'
+      },
+      { throwError: false }
+    )
+
+    t.teardown(cleanup)
+    const result = await fn()
+
+    t.is(result.isFulfilled, false)
+    t.is(result.value.message, '"oops"')
+    t.is(result.value.name, 'NonError')
+    t.is(typeof result.profiling, 'object')
+  }
 })
 
 test('handle timeout', async t => {
