@@ -9,6 +9,7 @@ const path = require('path')
 const transformDependencies = require('./transform-dependencies')
 const detectDependencies = require('./detect-dependencies')
 const generateTemplate = require('../template')
+const measure = require('../measure')
 
 const MINIFY = (() => {
   return process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
@@ -31,37 +32,45 @@ const packageManager = (() => {
 
 const tmpdirDefault = () => fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
 
-const getTmp = async (content, tmpdir) => {
+const getTmpDir = async tmpdir => {
   const cwd = await tmpdir()
   await fs.mkdir(cwd, { recursive: true })
-
-  const filepath = path.join(cwd, 'index.js')
-  await fs.writeFile(filepath, content)
-
+  // TODO: fs.rm is not consistent over time
+  // TODO: is recursive / force necessary?
   const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
-  return { filepath, cwd, content, cleanup }
+  return { cwd, cleanup }
 }
 
 module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const compiledTemplate = generateTemplate(snippet)
   const dependencies = detectDependencies(compiledTemplate)
-  const tmp = await getTmp(transformDependencies(compiledTemplate), tmpdir)
 
-  await $(packageManager.init, { cwd: tmp.cwd })
-  await $(`${packageManager.install} ${dependencies.join(' ')}`, {
-    cwd: tmp.cwd
-  })
+  const content = transformDependencies(compiledTemplate)
+  const tmpDir = await measure('getTmpDir', () => getTmpDir(tmpdir))
 
-  const result = await esbuild.build({
-    entryPoints: [tmp.filepath],
-    bundle: true,
-    ...MINIFY,
-    write: false,
-    platform: 'node'
-  })
+  await measure('npm:init', () => $(packageManager.init, { cwd: tmpDir.cwd }))
+  await measure('npm:install', () =>
+    $(`${packageManager.install} ${dependencies.join(' ')}`, { cwd: tmpDir.cwd })
+  )
 
-  await tmp.cleanup()
-  return getTmp(result.outputFiles[0].text, tmpdir)
+  const result = await measure('esbuild', () =>
+    esbuild.build({
+      stdin: {
+        contents: content,
+        resolveDir: tmpDir.cwd,
+        sourcefile: 'index.js'
+      },
+      bundle: true,
+      ...MINIFY,
+      write: false,
+      platform: 'node'
+    })
+  )
+
+  return {
+    content: result.outputFiles[0].text,
+    cleanupPromise: measure('tmpDir:cleanup', () => tmpDir.cleanup())
+  }
 }
 
 module.exports.detectDependencies = detectDependencies
