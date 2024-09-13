@@ -2,10 +2,11 @@
 
 const { deserializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
+const { Readable } = require('node:stream')
 const $ = require('tinyspawn')
-const path = require('path')
 
 const compile = require('./compile')
+const { debug } = require('./debug')
 
 const createError = ({ name, message, ...props }) => {
   const error = new Error(message)
@@ -14,12 +15,8 @@ const createError = ({ name, message, ...props }) => {
   return error
 }
 
-const flags = ({ filename, memory }) => {
-  const flags = [
-    '--disable-warning=ExperimentalWarning',
-    '--experimental-permission',
-    `--allow-fs-read=${filename}`
-  ]
+const flags = ({ memory }) => {
+  const flags = ['--disable-warning=ExperimentalWarning', '--experimental-permission']
   if (memory) flags.push(`--max-old-space-size=${memory}`)
   return flags.join(' ')
 }
@@ -31,22 +28,26 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true } = {}) 
   const fn = async (...args) => {
     let duration
     try {
-      const { filepath } = await compilePromise
+      const { content, cleanupPromise } = await compilePromise
 
-      const cwd = path.dirname(filepath)
-      const filename = path.basename(filepath)
       duration = timeSpan()
-      const { stdout } = await $('node', [filename, JSON.stringify(args)], {
-        cwd,
+      const subprocess = $('node', ['-', JSON.stringify(args)], {
         env: {
           ...process.env,
-          NODE_OPTIONS: flags({ filename, memory })
+          NODE_OPTIONS: flags({ memory })
         },
         timeout,
         killSignal: 'SIGKILL'
       })
+      Readable.from(content).pipe(subprocess.stdin)
+      const [{ stdout }] = await Promise.all([subprocess, cleanupPromise])
       const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
       profiling.duration = duration()
+      debug('node', {
+        duration: `${Math.round(profiling.duration / 100)}s`,
+        memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`
+      })
+
       return isFulfilled
         ? { isFulfilled, value, profiling, logging }
         : throwError
