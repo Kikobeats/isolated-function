@@ -1,5 +1,4 @@
 name: pull_request
-
 on:
   push:
     branches:
@@ -12,6 +11,9 @@ jobs:
   test:
     if: github.ref != 'refs/heads/master'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [lts/*, latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,7 +22,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: ${{ matrix.node-version }}
       - name: Setup PNPM
         uses: pnpm/action-setup@v4
         with:
