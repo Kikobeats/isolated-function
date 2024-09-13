@@ -21,12 +21,12 @@ const MINIFY = (() => {
       }
 })()
 
-const packageManager = (() => {
+const install = (() => {
   try {
     execSync('which pnpm').toString().trim()
-    return { init: 'pnpm init', install: 'pnpm install' }
+    return 'pnpm install'
   } catch {
-    return { init: 'npm init --yes', install: 'npm install' }
+    return 'npm install'
   }
 })()
 
@@ -44,9 +44,9 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const content = transformDependencies(compiledTemplate)
   const tmpDir = await duration('tmpdir', tmpdir)
 
-  await duration('npm:init', () => $(packageManager.init, { cwd: tmpDir.cwd }))
+  await duration('npm:init', () => fs.writeFile(path.join(tmpDir.cwd, 'package.json'), '{}'))
   await duration('npm:install', () =>
-    $(`${packageManager.install} ${dependencies.join(' ')}`, { cwd: tmpDir.cwd })
+    $(`${install} ${dependencies.join(' ')}`, { cwd: tmpDir.cwd })
   )
 
   const result = await duration('esbuild', () =>
