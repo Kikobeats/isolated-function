@@ -35,6 +35,9 @@
   - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
     - [fn](#fn)
     - [teardown](#teardown)
+- [Environment Variables](#environment-variables)
+    - [`ISOLATED_FUNCTIONS_MINIFY`](#isolated_functions_minify)
+    - [`DEBUG`](#debug)
 - [License](#license)
 
 ## Install
@@ -262,9 +265,19 @@ Timeout after a specified amount of time, in milliseconds.
 ##### tmpdir
 
 Type: `function`<br>
-Default: `fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))`
 
-The temporal folder to use for installing code dependencies.
+It setup the temporal folder to be used for installing code dependencies.
+
+The default implementation is:
+
+```js
+const tmpdir = async () => {
+  const cwd = await fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
+  await fs.mkdir(cwd, { recursive: true })
+  const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
+  return { cwd, cleanup }
+}
+```
 
 ### => (fn([...args]), teardown())
 
@@ -279,6 +292,18 @@ The isolated function to execute. You can pass arguments over it.
 Type: `function`
 
 A function to be called to release resources associated with the **isolated-function**.
+
+## Environment Variables
+
+#### `ISOLATED_FUNCTIONS_MINIFY`
+
+Default: `true`
+
+When is `false`, it disabled minify the compiled code.
+
+#### `DEBUG`
+
+Pass `DEBUG=isolated-function` for enabling debug timing output.
 
 ## License
 

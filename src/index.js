@@ -1,12 +1,12 @@
 'use strict'
 
-const { Readable } = require('node:stream')
 const { deserializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
+const { Readable } = require('node:stream')
 const $ = require('tinyspawn')
 
 const compile = require('./compile')
-const { debug } = require('./measure')
+const { debug } = require('./debug')
 
 const createError = ({ name, message, ...props }) => {
   const error = new Error(message)

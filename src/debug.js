@@ -2,10 +2,10 @@
 
 const debug = require('debug-logfmt')('isolated-function')
 
-module.exports = async (name, fn) => {
+const duration = async (name, fn) => {
   const duration = debug.duration(name)
 
-  return fn()
+  return Promise.resolve(fn())
     .then(result => {
       duration()
       return result
@@ -16,4 +16,4 @@ module.exports = async (name, fn) => {
     })
 }
 
-module.exports.debug = debug
+module.exports = { debug, duration }

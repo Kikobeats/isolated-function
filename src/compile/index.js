@@ -9,7 +9,7 @@ const path = require('path')
 const transformDependencies = require('./transform-dependencies')
 const detectDependencies = require('./detect-dependencies')
 const generateTemplate = require('../template')
-const measure = require('../measure')
+const { duration } = require('../debug')
 
 const MINIFY = (() => {
   return process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
@@ -30,13 +30,9 @@ const packageManager = (() => {
   }
 })()
 
-const tmpdirDefault = () => fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
-
-const getTmpDir = async tmpdir => {
-  const cwd = await tmpdir()
+const tmpdirDefault = async () => {
+  const cwd = await fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
   await fs.mkdir(cwd, { recursive: true })
-  // TODO: fs.rm is not consistent over time
-  // TODO: is recursive / force necessary?
   const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
   return { cwd, cleanup }
 }
@@ -46,14 +42,14 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const dependencies = detectDependencies(compiledTemplate)
 
   const content = transformDependencies(compiledTemplate)
-  const tmpDir = await measure('getTmpDir', () => getTmpDir(tmpdir))
+  const tmpDir = await duration('tmpdir', tmpdir)
 
-  await measure('npm:init', () => $(packageManager.init, { cwd: tmpDir.cwd }))
-  await measure('npm:install', () =>
+  await duration('npm:init', () => $(packageManager.init, { cwd: tmpDir.cwd }))
+  await duration('npm:install', () =>
     $(`${packageManager.install} ${dependencies.join(' ')}`, { cwd: tmpDir.cwd })
   )
 
-  const result = await measure('esbuild', () =>
+  const result = await duration('esbuild', () =>
     esbuild.build({
       stdin: {
         contents: content,
@@ -69,7 +65,7 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
 
   return {
     content: result.outputFiles[0].text,
-    cleanupPromise: measure('tmpDir:cleanup', () => tmpDir.cleanup())
+    cleanupPromise: duration('tmpDir:cleanup', tmpDir.cleanup)
   }
 }
 
