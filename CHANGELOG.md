@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.19 (2024-09-14)
+
+
+### Features
+
+* detect builtin modules ([4c32e59](https://github.com/Kikobeats/isolated-function/commit/4c32e59c4acbb84aa119c482bbfaf57dc1a0c615))
+
 ### 0.1.18 (2024-09-14)
 
 ### 0.1.17 (2024-09-13)
