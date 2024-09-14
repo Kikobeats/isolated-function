@@ -23,7 +23,9 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
 
   const content = transformDependencies(compiledTemplate)
   const tmpDir = await duration('tmpdir', tmpdir)
-  await duration('npm:install', () => installDependencies({ dependencies, cwd: tmpDir.cwd }))
+  await duration('npm:install', () => installDependencies({ dependencies, cwd: tmpDir.cwd }), {
+    dependencies
+  })
   const result = await duration('esbuild', () => build({ content, cwd: tmpDir.cwd }))
 
   return {

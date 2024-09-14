@@ -2,16 +2,16 @@
 
 const debug = require('debug-logfmt')('isolated-function')
 
-const duration = async (name, fn) => {
+const duration = async (name, fn, props) => {
   const duration = debug.duration(name)
 
   return Promise.resolve(fn())
     .then(result => {
-      duration()
+      props ? duration(props) : duration()
       return result
     })
     .catch(error => {
-      duration.error()
+      props ? duration.error(props) : duration.duration.error()
       throw error
     })
 }
