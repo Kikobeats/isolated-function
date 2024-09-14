@@ -20,18 +20,20 @@ const tmpdirDefault = async () => {
 module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   const compiledTemplate = generateTemplate(snippet)
   const dependencies = detectDependencies(compiledTemplate)
+  let content = transformDependencies(compiledTemplate)
+  let cleanupPromise
 
-  const content = transformDependencies(compiledTemplate)
-  const tmpDir = await duration('tmpdir', tmpdir)
-  await duration('npm:install', () => installDependencies({ dependencies, cwd: tmpDir.cwd }), {
-    dependencies
-  })
-  const result = await duration('esbuild', () => build({ content, cwd: tmpDir.cwd }))
-
-  return {
-    content: result.outputFiles[0].text,
-    cleanupPromise: duration('tmpDir:cleanup', tmpDir.cleanup)
+  if (dependencies.length) {
+    const { cwd, cleanup } = await duration('tmpdir', tmpdir)
+    await duration('npm:install', () => installDependencies({ dependencies, cwd }), {
+      dependencies
+    })
+    const result = await duration('esbuild', () => build({ content, cwd }))
+    content = result.outputFiles[0].text
+    cleanupPromise = duration('tmpDir:cleanup', cleanup)
   }
+
+  return { content, cleanupPromise }
 }
 
 module.exports.detectDependencies = detectDependencies
