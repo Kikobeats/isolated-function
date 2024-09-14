@@ -20,7 +20,9 @@ module.exports = ({ content, cwd }) =>
       sourcefile: 'index.js'
     },
     bundle: true,
-    ...MINIFY,
     write: false,
-    platform: 'node'
+    platform: 'node',
+    legalComments: 'eof',
+    target: 'es2023',
+    ...MINIFY
   })
