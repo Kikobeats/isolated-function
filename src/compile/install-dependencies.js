@@ -8,9 +8,9 @@ const path = require('path')
 const install = (() => {
   try {
     execSync('which pnpm').toString().trim()
-    return 'pnpm install'
+    return 'pnpm install --no-lockfile --silent'
   } catch {
-    return 'npm install'
+    return 'npm install --no-package-lock --silent'
   }
 })()
 
