@@ -76,6 +76,9 @@
     "test": "c8 ava"
   },
   "license": "MIT",
+  "ava": {
+    "workerThreads": false
+  },
   "commitlint": {
     "extends": [
       "@commitlint/config-conventional"
