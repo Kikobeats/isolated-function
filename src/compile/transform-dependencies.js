@@ -4,7 +4,7 @@ const walk = require('acorn-walk')
 const acorn = require('acorn')
 
 module.exports = code => {
-  const ast = acorn.parse(code, { ecmaVersion: 2020, sourceType: 'module' })
+  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
 
   let newCode = ''
   let lastIndex = 0

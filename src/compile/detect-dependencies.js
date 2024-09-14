@@ -64,7 +64,7 @@ module.exports = code => {
   const dependencies = new Set()
 
   // Parse the code into an AST
-  const ast = acorn.parse(code, { ecmaVersion: 2020, sourceType: 'module' })
+  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
 
   // Traverse the AST to find require and import statements
   walk.simple(ast, {
