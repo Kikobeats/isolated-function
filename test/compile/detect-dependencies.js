@@ -36,3 +36,29 @@ test('detect imports', t => {
     'is-string@latest'
   ])
 })
+
+test('detect builtin modules', t => {
+  {
+    const code = `
+    const fs = require('node:fs');
+    const http = require('http');
+    const https = require('https');
+    const path = require('path');
+    const url = require('url');
+    const fake = require('node:fake');
+  `
+
+    t.deepEqual(detectDependencies(code), ['node:fake@latest'])
+  }
+  {
+    const code = `
+    import fs from 'node:fs';
+    import http from 'http';
+    import https from 'https';
+    import path from 'path';
+    import url from 'url';
+    import fake from 'node:fake';
+  `
+    t.deepEqual(detectDependencies(code), ['node:fake@latest'])
+  }
+})
