@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.25 (2024-10-16)
+
 ### [0.1.24](https://github.com/Kikobeats/isolated-function/compare/v0.1.23...v0.1.24) (2024-09-23)
 
 ### 0.1.23 (2024-09-14)
