@@ -34,7 +34,7 @@
   ],
   "dependencies": {
     "@kikobeats/time-span": "~1.0.5",
-    "acorn": "~8.13.0",
+    "acorn": "~8.14.0",
     "acorn-walk": "~8.3.4",
     "debug-logfmt": "~1.2.3",
     "ensure-error": "~3.0.1",
