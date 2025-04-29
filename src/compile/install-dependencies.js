@@ -7,7 +7,9 @@ const path = require('path')
 
 const install = (() => {
   try {
-    execSync('which pnpm').toString().trim()
+    execSync('which pnpm', { stdio: ['pipe', 'pipe', 'ignore'] })
+      .toString()
+      .trim()
     return 'pnpm install --no-lockfile --silent'
   } catch {
     return 'npm install --no-package-lock --silent'
