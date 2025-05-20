@@ -5,7 +5,8 @@ const SERIALIZE_ERROR = require('./serialize-error')
 module.exports = snippet => `
   const args = JSON.parse(process.argv[2])
 
-  const logging = Object.create(null)
+  /* https://github.com/Kikobeats/null-prototype-object */
+  const logging = new (/* @__PURE__ */ (() => { let e = function(){}; return e.prototype = Object.create(null), Object.freeze(e.prototype), e })());
 
   for (const method of ['log', 'info', 'debug', 'warn', 'error']) {
     console[method] = function (...args) {
