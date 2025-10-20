@@ -15,8 +15,12 @@ const createError = ({ name, message, ...props }) => {
   return error
 }
 
+const [major] = process.version.slice(1).split('.').map(Number)
+
+const PERMISSION_FLAG = major >= 24 ? '--permission' : '--experimental-permission'
+
 const flags = ({ memory }) => {
-  const flags = ['--disable-warning=ExperimentalWarning', '--experimental-permission']
+  const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (memory) flags.push(`--max-old-space-size=${memory}`)
   return flags.join(' ')
 }
