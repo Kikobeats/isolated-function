@@ -10,7 +10,7 @@ test('child-process', async t => {
   const [fn, cleanup] = isolatedFunction(
     () => {
       const { execSync } = require('child_process')
-      return execSync('echo hello').toString()
+      return execSync('echo hello').toString().trim()
     },
     {
       allow: ['child_process']
@@ -20,7 +20,7 @@ test('child-process', async t => {
   t.teardown(cleanup)
 
   const { value } = await fn()
-  t.is(value, 'hello\n')
+  t.is(value, 'hello')
 })
 ;(nodeMajor >= 25 ? test : test.skip)('network', async t => {
   const [fn, cleanup] = isolatedFunction(
