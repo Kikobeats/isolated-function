@@ -4,6 +4,8 @@ const test = require('ava')
 
 const isolatedFunction = require('..')
 
+const [nodeMajor] = process.version.slice(1).split('.').map(Number)
+
 test('throw an error if snippet is not a function or string', t => {
   t.throws(
     () => {
@@ -137,5 +139,40 @@ test('handle child process', async t => {
     const error = await t.throwsAsync(fn())
 
     t.is(error.message, "Access to 'ChildProcess' has been restricted")
+  }
+})
+;(nodeMajor >= 25 ? test : test.skip)('handle network access', async t => {
+  {
+    const [fn, cleanup] = isolatedFunction(async () => {
+      function doFetch (url) {
+        return new Promise((resolve, reject) => {
+          const req = require('node:http').get(url, res => {
+            let data = ''
+
+            res.on('data', chunk => {
+              data += chunk
+            })
+
+            res.on('end', () => {
+              resolve({
+                statusCode: res.statusCode,
+                headers: res.headers,
+                body: data
+              })
+            })
+          })
+
+          req.on('error', reject)
+        })
+      }
+
+      const { statusCode } = await doFetch('http://example.com')
+      return statusCode
+    })
+
+    t.teardown(cleanup)
+
+    const error = await t.throwsAsync(fn())
+    t.is(error.message, "Access to 'network' has been restricted")
   }
 })
