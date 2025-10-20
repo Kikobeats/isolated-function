@@ -15,9 +15,9 @@ const createError = ({ name, message, ...props }) => {
   return error
 }
 
-const [major] = process.version.slice(1).split('.').map(Number)
+const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
-const PERMISSION_FLAG = major >= 24 ? '--permission' : '--experimental-permission'
+const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permission'
 
 const flags = ({ memory }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
@@ -77,9 +77,15 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true } = {}) 
       }
 
       if (error.code === 'ERR_ACCESS_DENIED') {
+        const permission = error.permission
+          ? error.permission
+          : error.message.includes('getaddrinfo')
+            ? 'network'
+            : undefined
+
         throw createError({
           name: 'PermissionError',
-          message: `Access to '${error.permission}' has been restricted`,
+          message: `Access to '${permission}' has been restricted`,
           profiling: { duration: duration() }
         })
       }
