@@ -49,8 +49,8 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
       const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
       profiling.duration = duration()
       debug('node', {
-        duration: `${Math.round(profiling.duration / 100)}s`,
-        memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`
+        memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`,
+        duration: `${Math.round(profiling.duration / 100)}s`
       })
 
       return isFulfilled

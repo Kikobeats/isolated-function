@@ -1,9 +1,7 @@
 'use strict'
 
 const { execSync } = require('child_process')
-const { writeFile } = require('fs/promises')
 const $ = require('tinyspawn')
-const path = require('path')
 
 const install = (() => {
   try {
@@ -17,6 +15,5 @@ const install = (() => {
 })()
 
 module.exports = async ({ dependencies, cwd }) => {
-  await writeFile(path.join(cwd, 'package.json'), '{}')
   return $(`${install} ${dependencies.join(' ')}`, { cwd })
 }
