@@ -73,7 +73,7 @@
     "release": "standard-version -a",
     "release:github": "github-generate-release",
     "release:tags": "git push --follow-tags origin HEAD:master",
-    "test": "c8 ava --fail-fast"
+    "test": "c8 ava"
   },
   "license": "MIT",
   "ava": {
