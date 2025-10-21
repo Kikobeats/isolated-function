@@ -3,7 +3,7 @@
 const esbuild = require('esbuild')
 
 const MINIFY = (() => {
-  return process.env.ISOLATED_FUNCTIONS_MINIFY !== 'false'
+  return process.env.ISOLATED_FUNCTIONS_MINIFY === 'false'
     ? {}
     : {
         minifyWhitespace: true,
