@@ -32,7 +32,6 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
 
   const fn = async (...args) => {
     let duration
-    let _stdout
     try {
       const { content, cleanupPromise } = await compilePromise
 
@@ -47,7 +46,6 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
       })
       Readable.from(content).pipe(subprocess.stdin)
       const [{ stdout }] = await Promise.all([subprocess, cleanupPromise])
-      _stdout = stdout
       const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
       profiling.duration = duration()
       debug('node', {
@@ -63,12 +61,6 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
             })()
           : { isFulfilled: false, value: deserializeError(value), profiling, logging }
     } catch (error) {
-      console.log('=========== DEBUG ===========')
-      console.log('error', error)
-      console.log('args', JSON.stringify(args))
-      console.log('_stdout', JSON.stringify(_stdout))
-
-      console.log('=========== DEBUG ===========')
       if (error.signalCode === 'SIGTRAP') {
         throw createError({
           name: 'MemoryError',
