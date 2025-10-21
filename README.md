@@ -19,6 +19,7 @@
 - [Install](#install)
 - [Quickstart](#quickstart)
   - [Minimal privilege execution](#minimal-privilege-execution)
+  - [Granting specific permissions](#granting-specific-permissions)
   - [Auto install dependencies](#auto-install-dependencies)
   - [Execution profiling](#execution-profiling)
   - [Resource limits](#resource-limits)
@@ -32,6 +33,7 @@
       - [throwError](#throwerror)
       - [timeout](#timeout)
       - [tmpdir](#tmpdir)
+      - [allow](#allow)
   - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
     - [fn](#fn)
     - [teardown](#teardown)
@@ -88,6 +90,28 @@ If you exceed your limit, an error will occur. Any of the following interaction 
 - Inspector protocol
 - File system access
 - WASI
+
+### Granting specific permissions
+
+You can grant specific permissions to the isolated function using the `allow` option:
+
+```js
+const [fn, teardown] = isolatedFunction(
+  () => {
+    const { execSync } = require('child_process')
+    return execSync('echo hello').toString().trim()
+  },
+  {
+    allow: ['child-process']
+  }
+)
+
+const { value } = await fn()
+console.log(value) // 'hello'
+await teardown()
+```
+
+See [#allow](#allow) to know more.
 
 ### Auto install dependencies
 
@@ -277,6 +301,38 @@ const tmpdir = async () => {
   const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
   return { cwd, cleanup }
 }
+```
+
+##### allow
+
+Type: `string[]`<br>
+Default: `[]`
+
+An array of permissions to grant to the isolated function based on [Node.js Options](https://nodejs.org/api/cli.html#options)
+
+When empty, the function runs with minimal privileges and will throw an error if it attempts to access restricted resources. Available permissions are:
+
+- `addons`
+- `child-process`
+- `fs-read`
+- `fs-write`
+- `inspector`
+- `net`
+- `wasi`
+- `worker`
+
+Example:
+
+```js
+const [fn, cleanup] = isolatedFunction(
+  async () => {
+    const http = require('node:http')
+    // Network request code here
+  },
+  {
+    allow: ['net']
+  }
+)
 ```
 
 ### => (fn([...args]), teardown())
