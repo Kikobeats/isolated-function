@@ -3,6 +3,24 @@
 const walk = require('acorn-walk')
 const acorn = require('acorn')
 
+/**
+ * Transforms dependency module names by removing version specifiers.
+ *
+ * Parses JavaScript code and walks through the AST to find all require() calls
+ * and import declarations. Extracts module names from strings that include
+ * version information (e.g., 'is-emoji@1.0.0' becomes 'is-emoji').
+ *
+ * Handles both:
+ * - Scoped packages: '@scope/package@1.0.0' → '@scope/package'
+ * - Regular packages: 'package@1.0.0' → 'package'
+ *
+ * This transformation is necessary because the dependency strings include
+ * version specifiers for installation tracking, but require/import statements
+ * should only reference the base module name.
+ *
+ * @param {string} code - JavaScript code containing require() or import statements
+ * @returns {string} Transformed code with version specifiers removed from dependencies
+ */
 module.exports = code => {
   const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
 
