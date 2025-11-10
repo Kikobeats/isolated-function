@@ -23,6 +23,6 @@ module.exports = ({ content, cwd }) =>
     write: false,
     platform: 'node',
     legalComments: 'eof',
-    target: 'es2023',
+    target: 'node24',
     ...MINIFY
   })
