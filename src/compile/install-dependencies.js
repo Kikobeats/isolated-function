@@ -3,6 +3,8 @@
 const { execSync } = require('child_process')
 const $ = require('tinyspawn')
 
+const { DependencyNameError, DependencyUnallowedError } = require('../errors')
+
 const install = (() => {
   try {
     execSync('which pnpm', { stdio: ['pipe', 'pipe', 'ignore'] })
@@ -13,14 +15,6 @@ const install = (() => {
     return 'npm install --no-package-lock --ignore-scripts --silent'
   }
 })()
-
-class UntrustedDependencyError extends Error {
-  constructor (dependency) {
-    super(`Dependency '${dependency}' is not in the allowed list`)
-    this.name = 'UntrustedDependencyError'
-    this.dependency = dependency
-  }
-}
 
 const extractPackageName = dependency => {
   if (dependency.startsWith('@')) {
@@ -41,12 +35,19 @@ const extractPackageName = dependency => {
 }
 
 const validateDependencies = (dependencies, allowed) => {
+  // Always check for command injection, regardless of allow list
+  for (const dependency of dependencies) {
+    if (dependency.includes(' ')) {
+      throw new DependencyNameError(dependency)
+    }
+  }
+
   if (!allowed) return
 
   for (const dependency of dependencies) {
     const packageName = extractPackageName(dependency)
     if (!allowed.includes(packageName)) {
-      throw new UntrustedDependencyError(packageName)
+      throw new DependencyUnallowedError(packageName)
     }
   }
 }
@@ -55,5 +56,3 @@ module.exports = async ({ dependencies, cwd, allow = {} }) => {
   validateDependencies(dependencies, allow.dependencies)
   return $(`${install} ${dependencies.join(' ')}`, { cwd, env: { ...process.env, CI: true } })
 }
-
-module.exports.UntrustedDependencyError = UntrustedDependencyError

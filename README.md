@@ -155,7 +155,7 @@ await fn('🙌') // => true
 await teardown()
 ```
 
-If the code tries to require a package not in the allowed list, an `UntrustedDependencyError` is thrown **before** any npm install happens:
+If the code tries to require a package not in the allowed list, a `DependencyUnallowedError` is thrown **before** any npm install happens:
 
 ```js
 const [fn, teardown] = isolatedFunction(
@@ -169,7 +169,7 @@ const [fn, teardown] = isolatedFunction(
 )
 
 await fn()
-// => UntrustedDependencyError: Dependency 'malicious-package' is not in the allowed list
+// => DependencyUnallowedError: Dependency 'malicious-package' is not in the allowed list
 ```
 
 > **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because npm packages can execute code during installation via `preinstall`/`postinstall` scripts. The `--ignore-scripts` flag is used to mitigate this, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.

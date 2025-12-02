@@ -41,4 +41,3 @@ module.exports = async (snippet, { tmpdir = tmpdirDefault, allow = {} } = {}) =>
 
 module.exports.detectDependencies = detectDependencies
 module.exports.transformDependencies = transformDependencies
-module.exports.UntrustedDependencyError = installDependencies.UntrustedDependencyError

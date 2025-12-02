@@ -153,7 +153,7 @@ test('handle untrusted dependencies', async t => {
 
   const error = await t.throwsAsync(fn())
 
-  t.is(error.name, 'UntrustedDependencyError')
+  t.is(error.name, 'DependencyUnallowedError')
   t.is(error.message, "Dependency 'malicious-package' is not in the allowed list")
   t.is(error.dependency, 'malicious-package')
 })
