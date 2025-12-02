@@ -1,6 +1,6 @@
 'use strict'
 
-const { deserializeError } = require('serialize-error')
+const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { Readable } = require('node:stream')
 const $ = require('tinyspawn')
@@ -61,7 +61,7 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
             })()
           : { isFulfilled: false, value: deserializeError(value), profiling, logging }
     } catch (error) {
-      console.log('DEBUG ERROR', error)
+      debug.error(serializeError(error))
       if (error.signalCode === 'SIGTRAP') {
         throw createError({
           name: 'MemoryError',
