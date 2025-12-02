@@ -32,6 +32,7 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
   }
 
   const result = await duration('esbuild', () => build({ content, cwd }))
+  debug('esbuild:output', { content: result.outputFiles[0].text.length })
   content = result.outputFiles[0].text
   const cleanupPromise = duration('tmpDir:cleanup', cleanup)
 
