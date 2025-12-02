@@ -19,16 +19,17 @@ const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permission'
 
-const flags = ({ memory, allow }) => {
+const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (memory) flags.push(`--max-old-space-size=${memory}`)
-  allow.forEach(resource => flags.push(`--allow-${resource}`))
+  permissions.forEach(resource => flags.push(`--allow-${resource}`))
   return flags.join(' ')
 }
 
-module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow = [] } = {}) => {
+module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow = {} } = {}) => {
   if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
-  const compilePromise = compile(snippet, tmpdir)
+  const { permissions = [] } = allow
+  const compilePromise = compile(snippet, { tmpdir, allow })
 
   const fn = async (...args) => {
     let duration
@@ -39,7 +40,7 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
       const subprocess = $('node', ['-', JSON.stringify(args)], {
         env: {
           ...process.env,
-          NODE_OPTIONS: flags({ memory, allow })
+          NODE_OPTIONS: flags({ memory, permissions })
         },
         timeout,
         killSignal: 'SIGKILL'

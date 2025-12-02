@@ -45,6 +45,23 @@ export interface FailureResult {
 export type ExecutionResult<T = unknown> = SuccessResult<T> | FailureResult
 
 /**
+ * Allow configuration for permissions and dependencies
+ */
+export interface AllowOptions {
+  /**
+   * Array of Node.js permissions to grant to the isolated function.
+   * Available permissions: addons, child-process, fs-read, fs-write, inspector, net, wasi, worker
+   */
+  permissions?: string[]
+  /**
+   * List of allowed npm package names that can be installed.
+   * When provided, only these packages can be required/imported.
+   * This prevents arbitrary package installation which could lead to RCE.
+   */
+  dependencies?: string[]
+}
+
+/**
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {
@@ -56,8 +73,8 @@ export interface IsolatedFunctionOptions {
   memory?: number
   /** When false, errors are returned instead of thrown */
   throwError?: boolean
-  /** Array of resources to allow access to */
-  allow?: string[]
+  /** Configuration for allowed permissions and dependencies */
+  allow?: AllowOptions
 }
 
 /**

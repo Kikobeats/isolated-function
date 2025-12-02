@@ -19,14 +19,14 @@ const tmpdirDefault = async () => {
   return { cwd, cleanup }
 }
 
-module.exports = async (snippet, tmpdir = tmpdirDefault) => {
+module.exports = async (snippet, { tmpdir = tmpdirDefault, allow = {} } = {}) => {
   let content = template(snippet)
   const { cwd, cleanup } = await tmpdir()
 
   const dependencies = detectDependencies(content)
   if (dependencies.length) {
     content = transformDependencies(content)
-    await duration('npm:install', () => installDependencies({ dependencies, cwd }), {
+    await duration('npm:install', () => installDependencies({ dependencies, cwd, allow }), {
       dependencies
     })
   }
@@ -41,3 +41,4 @@ module.exports = async (snippet, tmpdir = tmpdirDefault) => {
 
 module.exports.detectDependencies = detectDependencies
 module.exports.transformDependencies = transformDependencies
+module.exports.UntrustedDependencyError = installDependencies.UntrustedDependencyError

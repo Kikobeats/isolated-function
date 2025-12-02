@@ -21,6 +21,7 @@
   - [Minimal privilege execution](#minimal-privilege-execution)
   - [Granting specific permissions](#granting-specific-permissions)
   - [Auto install dependencies](#auto-install-dependencies)
+  - [Restricting allowed dependencies](#restricting-allowed-dependencies)
   - [Execution profiling](#execution-profiling)
   - [Resource limits](#resource-limits)
   - [Logging](#logging)
@@ -34,6 +35,8 @@
       - [timeout](#timeout)
       - [tmpdir](#tmpdir)
       - [allow](#allow)
+        - [permissions](#permissions)
+        - [dependencies](#dependencies)
   - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
     - [fn](#fn)
     - [teardown](#teardown)
@@ -42,13 +45,15 @@
     - [`DEBUG`](#debug)
 - [License](#license)
 
-## Install
+
+
+# Install
 
 ```bash
 npm install isolated-function --save
 ```
 
-## Quickstart
+# Quickstart
 
 **isolated-function** is a modern solution for running untrusted code in Node.js.
 
@@ -68,7 +73,7 @@ const { value, profiling } = await sum(3, 2)
 await teardown()
 ```
 
-### Minimal privilege execution
+## Minimal privilege execution
 
 The hosted code runs in a separate process, with minimal privilege, using [Node.js permission model API](https://nodejs.org/api/permissions.html#permission-model).
 
@@ -91,9 +96,9 @@ If you exceed your limit, an error will occur. Any of the following interaction 
 - File system access
 - WASI
 
-### Granting specific permissions
+## Granting specific permissions
 
-You can grant specific permissions to the isolated function using the `allow` option:
+You can grant specific permissions to the isolated function using the `allow.permissions` option:
 
 ```js
 const [fn, teardown] = isolatedFunction(
@@ -102,7 +107,7 @@ const [fn, teardown] = isolatedFunction(
     return execSync('echo hello').toString().trim()
   },
   {
-    allow: ['child-process']
+    allow: { permissions: ['child-process'] }
   }
 )
 
@@ -111,9 +116,9 @@ console.log(value) // 'hello'
 await teardown()
 ```
 
-See [#allow](#allow) to know more.
+See [#allow.permissions](#permissions) to know more.
 
-### Auto install dependencies
+## Auto install dependencies
 
 The hosted code is parsed for detecting `require`/`import` calls and install these dependencies:
 
@@ -131,7 +136,45 @@ await teardown()
 
 The dependencies, along with the hosted code, are bundled by [esbuild](https://esbuild.github.io/) into a single file that will be evaluated at runtime.
 
-### Execution profiling
+## Restricting allowed dependencies
+
+When running untrusted code, you should restrict which npm packages can be installed to prevent supply chain attacks:
+
+```js
+const [fn, teardown] = isolatedFunction(
+  input => {
+    const isEmoji = require('is-standard-emoji')
+    return isEmoji(input)
+  },
+  {
+    allow: { dependencies: ['is-standard-emoji', 'lodash'] }
+  }
+)
+
+await fn('🙌') // => true
+await teardown()
+```
+
+If the code tries to require a package not in the allowed list, an `UntrustedDependencyError` is thrown **before** any npm install happens:
+
+```js
+const [fn, teardown] = isolatedFunction(
+  () => {
+    const malicious = require('malicious-package')
+    return malicious()
+  },
+  {
+    allow: { dependencies: ['lodash'] }
+  }
+)
+
+await fn()
+// => UntrustedDependencyError: Dependency 'malicious-package' is not in the allowed list
+```
+
+> **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because npm packages can execute code during installation via `preinstall`/`postinstall` scripts. The `--ignore-scripts` flag is used to mitigate this, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.
+
+## Execution profiling
 
 Any hosted code execution will be run in their own separate process:
 
@@ -160,7 +203,7 @@ console.log(profiling)
 
 Each execution has a profiling, which helps understand what happened.
 
-### Resource limits
+## Resource limits
 
 You can limit a **isolated-function** by memory:
 
@@ -194,7 +237,7 @@ await fn(100)
 // =>  TimeoutError: Execution timed out
 ```
 
-### Logging
+## Logging
 
 The logs are collected into a `logging` object returned after the execution:
 
@@ -220,7 +263,7 @@ console.log(logging)
 // }
 ```
 
-### Error handling
+## Error handling
 
 Any error during **isolated-function** execution will be propagated:
 
@@ -248,27 +291,27 @@ if (!isFufilled) {
 }
 ```
 
-## API
+# API
 
-### isolatedFunction(code, [options])
+## isolatedFunction(code, [options])
 
-#### code
+### code
 
 _Required_<br>
 Type: `function`
 
 The hosted function to run.
 
-#### options
+### options
 
-##### memory
+#### memory
 
 Type: `number`<br>
 Default: `Infinity`
 
 Set the function memory limit, in megabytes.
 
-##### throwError
+#### throwError
 
 Type: `boolean`<br>
 Default: `false`
@@ -279,14 +322,14 @@ The error will be accessible against `{ value: error, isFufilled: false }` objec
 
 Set the function memory limit, in megabytes.
 
-##### timeout
+#### timeout
 
 Type: `number`<br>
 Default: `Infinity`
 
 Timeout after a specified amount of time, in milliseconds.
 
-##### tmpdir
+#### tmpdir
 
 Type: `function`<br>
 
@@ -303,7 +346,30 @@ const tmpdir = async () => {
 }
 ```
 
-##### allow
+#### allow
+
+Type: `object`<br>
+Default: `{}`
+
+Configuration object for allowed permissions and dependencies.
+
+```js
+const [fn, cleanup] = isolatedFunction(
+  () => {
+    const { execSync } = require('child_process')
+    const lodash = require('lodash')
+    return lodash.uniq([1, 2, 2, 3])
+  },
+  {
+    allow: {
+      permissions: ['child-process'],
+      dependencies: ['lodash']
+    }
+  }
+)
+```
+
+##### permissions
 
 Type: `string[]`<br>
 Default: `[]`
@@ -330,38 +396,62 @@ const [fn, cleanup] = isolatedFunction(
     // Network request code here
   },
   {
-    allow: ['net']
+    allow: { permissions: ['net'] }
   }
 )
 ```
 
-### => (fn([...args]), teardown())
+##### dependencies
 
-#### fn
+Type: `string[]`<br>
+Default: `undefined`
+
+A whitelist of npm package names that are allowed to be installed. When provided, only packages in this list can be required/imported by the isolated function.
+
+This is a critical security feature when running untrusted code, as it prevents arbitrary package installation which could lead to remote code execution via malicious packages.
+
+```js
+const [fn, cleanup] = isolatedFunction(
+  () => {
+    const lodash = require('lodash')
+    const axios = require('axios')
+    return lodash.get({ a: 1 }, 'a')
+  },
+  {
+    allow: { dependencies: ['lodash', 'axios'] }
+  }
+)
+```
+
+When `allow.dependencies` is not provided, any package can be installed (default behavior for backwards compatibility).
+
+## => (fn([...args]), teardown())
+
+### fn
 
 Type: `function`
 
 The isolated function to execute. You can pass arguments over it.
 
-#### teardown
+### teardown
 
 Type: `function`
 
 A function to be called to release resources associated with the **isolated-function**.
 
-## Environment Variables
+# Environment Variables
 
-#### `ISOLATED_FUNCTIONS_MINIFY`
+### `ISOLATED_FUNCTIONS_MINIFY`
 
 Default: `true`
 
 When is `false`, it disabled minify the compiled code.
 
-#### `DEBUG`
+### `DEBUG`
 
 Pass `DEBUG=isolated-function` for enabling debug timing output.
 
-## License
+# License
 
 **isolated-function** © [Kiko Beats](https://kikobeats.com), released under the [MIT](https://github.com/Kikobeats/isolated-function/blob/master/LICENSE.md) License.<br>
 Authored and maintained by Kiko Beats with help from [contributors](https://github.com/Kikobeats/isolated-function/contributors).
