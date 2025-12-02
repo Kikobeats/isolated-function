@@ -13,7 +13,7 @@ test('child-process', async t => {
       return execSync('echo hello').toString().trim()
     },
     {
-      allow: ['child_process']
+      allow: { permissions: ['child_process'] }
     }
   )
 
@@ -51,7 +51,7 @@ test('child-process', async t => {
       return statusCode
     },
     {
-      allow: ['net']
+      allow: { permissions: ['net'] }
     }
   )
 

@@ -141,6 +141,22 @@ test('handle child process', async t => {
     t.is(error.message, "Access to 'ChildProcess' has been restricted")
   }
 })
+
+test('handle untrusted dependencies', async t => {
+  const [fn] = isolatedFunction(
+    () => {
+      const malicious = require('malicious-package')
+      return malicious()
+    },
+    { allow: { dependencies: ['lodash', 'axios'] } }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.is(error.name, 'UntrustedDependencyError')
+  t.is(error.message, "Dependency 'malicious-package' is not in the allowed list")
+  t.is(error.dependency, 'malicious-package')
+})
 ;(nodeMajor >= 25 ? test : test.skip)('handle network access', async t => {
   {
     const [fn, cleanup] = isolatedFunction(async () => {

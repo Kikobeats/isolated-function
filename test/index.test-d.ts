@@ -52,7 +52,7 @@ const [fnWithOptions, cleanupWithOptions] = isolatedFunction<string>(
     memory: 128,
     timeout: 5000,
     throwError: false,
-    allow: ['fs']
+    allow: { permissions: ['fs'] }
   }
 )
 
