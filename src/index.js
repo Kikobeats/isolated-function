@@ -61,6 +61,7 @@ module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow =
             })()
           : { isFulfilled: false, value: deserializeError(value), profiling, logging }
     } catch (error) {
+      console.log('DEBUG ERROR', error)
       if (error.signalCode === 'SIGTRAP') {
         throw createError({
           name: 'MemoryError',
