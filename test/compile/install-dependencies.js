@@ -2,7 +2,7 @@
 
 const test = require('ava')
 
-const { UntrustedDependencyError } = require('../../src/compile')
+const { DependencyNameError, DependencyUnallowedError } = require('../../src/errors')
 const isolatedFunction = require('../..')
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
@@ -33,7 +33,7 @@ test('allow.dependencies › blocks untrusted dependencies', async t => {
 
   const error = await t.throwsAsync(fn('🙌'))
 
-  t.true(error instanceof UntrustedDependencyError)
+  t.true(error instanceof DependencyUnallowedError)
   t.is(error.message, "Dependency 'is-standard-emoji' is not in the allowed list")
   t.is(error.dependency, 'is-standard-emoji')
 })
@@ -63,7 +63,7 @@ test('allow.dependencies › blocks untrusted scoped packages', async t => {
 
   const error = await t.throwsAsync(fn())
 
-  t.true(error instanceof UntrustedDependencyError)
+  t.true(error instanceof DependencyUnallowedError)
   t.is(error.message, "Dependency '@kikobeats/time-span' is not in the allowed list")
   t.is(error.dependency, '@kikobeats/time-span')
 })
@@ -104,7 +104,35 @@ test('allow.dependencies › handles multiple dependencies', async t => {
     )
 
     const error = await t.throwsAsync(fn())
-    t.true(error instanceof UntrustedDependencyError)
+    t.true(error instanceof DependencyUnallowedError)
     t.is(error.dependency, 'is-number')
   }
+})
+
+test('allow.dependencies › blocks invalid package names with spaces', async t => {
+  const [fn] = isolatedFunction(
+    () => {
+      const _ = require('lodash@latest express')
+      return typeof _
+    },
+    { allow: { dependencies: ['lodash'] } }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.true(error instanceof DependencyNameError)
+  t.is(error.dependency, 'lodash@latest express')
+  t.true(error.message.includes('not a valid npm package name'))
+})
+
+test('allow.dependencies › blocks invalid package names even without allow list', async t => {
+  const [fn] = isolatedFunction(() => {
+    const _ = require('lodash@latest express')
+    return typeof _
+  })
+
+  const error = await t.throwsAsync(fn())
+
+  t.true(error instanceof DependencyNameError)
+  t.is(error.dependency, 'lodash@latest express')
 })

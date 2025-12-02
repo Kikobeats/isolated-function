@@ -6,7 +6,8 @@
   "types": "src/index.d.ts",
   "main": "src/index.js",
   "exports": {
-    ".": "./src/index.js"
+    ".": "./src/index.js",
+    "./errors": "./src/errors.js"
   },
   "author": {
     "email": "hello@microlink.io",
