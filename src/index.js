@@ -30,7 +30,7 @@ const flags = ({ memory, permissions }) => {
 
 const spawn = ({ args, env, timeout }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
-  if (timeout) {
+  if (Number.isFinite(timeout)) {
     const seconds = Math.ceil(timeout / 1000)
     return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-', args], spawnOpts)
   }
