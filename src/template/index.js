@@ -30,5 +30,5 @@ module.exports = snippet => `;(send => {
       respond(isFulfilled, value, performance.now() - t0, logging)
     }
   })
-  .catch(e => respond(false, ${SERIALIZE_ERROR}(e)))
+  .catch(e => respond(false, ${SERIALIZE_ERROR}(e), 0))
 })(process.stdout.write.bind(process.stdout))`
