@@ -2,47 +2,28 @@
 
 const test = require('ava')
 
-const isolatedFunction = require('..')
+const isolatedFunction = require('..')()
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
 
 test('runs plain javascript', async t => {
-  {
-    const [sum, cleanup] = isolatedFunction(() => 2 + 2)
-    t.teardown(cleanup)
-    t.is(await run(sum()), 4)
-  }
-  {
-    const [sum, cleanup] = isolatedFunction(String(() => 2 + 2))
-    t.teardown(cleanup)
-    t.is(await run(sum()), 4)
-  }
-  {
-    const [sum, cleanup] = isolatedFunction('() => 2 + 2')
-    t.teardown(cleanup)
-    t.is(await run(sum()), 4)
-  }
-  {
-    const [sum, cleanup] = isolatedFunction((x, y) => x + y)
-    t.teardown(cleanup)
-    t.is(await run(sum(2, 2)), 4)
-  }
-  {
-    const [fn, cleanup] = isolatedFunction(() => 2 + 2)
-    t.teardown(cleanup)
-    t.is(await run(fn()), 4)
-  }
-  {
-    const [fn, cleanup] = isolatedFunction(function () {
-      return 2 + 2
-    })
-    t.teardown(cleanup)
-    t.is(await run(fn()), 4)
-  }
+  t.is(await run(isolatedFunction(() => 2 + 2)()), 4)
+  t.is(await run(isolatedFunction(String(() => 2 + 2))()), 4)
+  t.is(await run(isolatedFunction('() => 2 + 2')()), 4)
+  t.is(await run(isolatedFunction((x, y) => x + y)(2, 2)), 4)
+  t.is(await run(isolatedFunction(() => 2 + 2)()), 4)
+  t.is(
+    await run(
+      isolatedFunction(function () {
+        return 2 + 2
+      })()
+    ),
+    4
+  )
 })
 
 test('capture logs', async t => {
-  const [fn, cleanup] = isolatedFunction(() => {
+  const fn = isolatedFunction(() => {
     console.log('console.log', { foo: 'bar' })
     console.info('console.info')
     console.debug('console.debug')
@@ -50,8 +31,6 @@ test('capture logs', async t => {
     console.error('console.error')
     return 'done'
   })
-
-  t.teardown(cleanup)
 
   const { value, logging } = await fn()
   t.is(value, 'done')
@@ -72,12 +51,10 @@ test('capture logs', async t => {
 })
 
 test('prevent to write to process.stdout', async t => {
-  const [fn, cleanup] = isolatedFunction(() => {
+  const fn = isolatedFunction(() => {
     process.stdout.write('disturbing')
     return 'done'
   })
-
-  t.teardown(cleanup)
 
   const { value, logging } = await fn()
   t.is(value, 'done')
@@ -85,31 +62,27 @@ test('prevent to write to process.stdout', async t => {
 })
 
 test('resolve require dependencies', async t => {
-  const [fn, cleanup] = isolatedFunction(emoji => {
+  const fn = isolatedFunction(emoji => {
     const isEmoji = require('is-standard-emoji@1.0.0')
     return isEmoji(emoji)
   })
-
-  t.teardown(cleanup)
 
   t.is(await run(fn('🙌')), true)
   t.is(await run(fn('foo')), false)
 })
 
 test('runs async code', async t => {
-  const [fn, cleanup] = isolatedFunction(async duration => {
+  const fn = isolatedFunction(async duration => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
     await delay(duration)
     return 'done'
   })
 
-  t.teardown(cleanup)
   t.is(await run(fn(200)), 'done')
 })
 
 test('escape arguments', async t => {
-  const [fn, cleanup] = isolatedFunction((...args) => args.length)
-  t.teardown(cleanup)
+  const fn = isolatedFunction((...args) => args.length)
 
   const result = await run(
     fn({
@@ -132,7 +105,7 @@ test('escape arguments', async t => {
 })
 
 test('memory profiling', async t => {
-  const [fn, cleanup] = isolatedFunction(() => {
+  const fn = isolatedFunction(() => {
     const storage = []
     const oneMegabyte = 1024 * 1024
     while (storage.length < 78) {
@@ -143,7 +116,6 @@ test('memory profiling', async t => {
       storage.push(array)
     }
   })
-  t.teardown(cleanup)
 
   const { value, profiling } = await fn()
 

@@ -3,12 +3,12 @@
 const test = require('ava')
 
 const { DependencyNameError, DependencyUnallowedError } = require('../../src/errors')
-const isolatedFunction = require('../..')
+const isolatedFunction = require('../..')()
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
 
 test('allow.dependencies › allows trusted dependencies', async t => {
-  const [fn, cleanup] = isolatedFunction(
+  const fn = isolatedFunction(
     emoji => {
       const isEmoji = require('is-standard-emoji@1.0.0')
       return isEmoji(emoji)
@@ -16,14 +16,12 @@ test('allow.dependencies › allows trusted dependencies', async t => {
     { allow: { dependencies: ['is-standard-emoji'] } }
   )
 
-  t.teardown(cleanup)
-
   t.is(await run(fn('🙌')), true)
   t.is(await run(fn('foo')), false)
 })
 
 test('allow.dependencies › blocks untrusted dependencies', async t => {
-  const [fn] = isolatedFunction(
+  const fn = isolatedFunction(
     emoji => {
       const isEmoji = require('is-standard-emoji@1.0.0')
       return isEmoji(emoji)
@@ -39,7 +37,7 @@ test('allow.dependencies › blocks untrusted dependencies', async t => {
 })
 
 test('allow.dependencies › allows scoped packages', async t => {
-  const [fn, cleanup] = isolatedFunction(
+  const fn = isolatedFunction(
     () => {
       const timeSpan = require('@kikobeats/time-span')
       return typeof timeSpan
@@ -47,13 +45,11 @@ test('allow.dependencies › allows scoped packages', async t => {
     { allow: { dependencies: ['@kikobeats/time-span'] } }
   )
 
-  t.teardown(cleanup)
-
   t.is(await run(fn()), 'function')
 })
 
 test('allow.dependencies › blocks untrusted scoped packages', async t => {
-  const [fn] = isolatedFunction(
+  const fn = isolatedFunction(
     () => {
       const timeSpan = require('@kikobeats/time-span')
       return typeof timeSpan
@@ -69,19 +65,17 @@ test('allow.dependencies › blocks untrusted scoped packages', async t => {
 })
 
 test('allow.dependencies › works without restriction when not provided', async t => {
-  const [fn, cleanup] = isolatedFunction(emoji => {
+  const fn = isolatedFunction(emoji => {
     const isEmoji = require('is-standard-emoji@1.0.0')
     return isEmoji(emoji)
   })
-
-  t.teardown(cleanup)
 
   t.is(await run(fn('🙌')), true)
 })
 
 test('allow.dependencies › handles multiple dependencies', async t => {
   {
-    const [fn, cleanup] = isolatedFunction(
+    const fn = isolatedFunction(
       () => {
         const isEmoji = require('is-standard-emoji@1.0.0')
         const isNumber = require('is-number')
@@ -90,11 +84,10 @@ test('allow.dependencies › handles multiple dependencies', async t => {
       { allow: { dependencies: ['is-standard-emoji', 'is-number'] } }
     )
 
-    t.teardown(cleanup)
     t.is(await run(fn()), true)
   }
   {
-    const [fn] = isolatedFunction(
+    const fn = isolatedFunction(
       () => {
         const isEmoji = require('is-standard-emoji@1.0.0')
         const isNumber = require('is-number')
@@ -110,7 +103,7 @@ test('allow.dependencies › handles multiple dependencies', async t => {
 })
 
 test('allow.dependencies › blocks invalid package names with spaces', async t => {
-  const [fn] = isolatedFunction(
+  const fn = isolatedFunction(
     () => {
       const _ = require('lodash@latest express')
       return typeof _
@@ -126,7 +119,7 @@ test('allow.dependencies › blocks invalid package names with spaces', async t 
 })
 
 test('allow.dependencies › blocks invalid package names even without allow list', async t => {
-  const [fn] = isolatedFunction(() => {
+  const fn = isolatedFunction(() => {
     const _ = require('lodash@latest express')
     return typeof _
   })

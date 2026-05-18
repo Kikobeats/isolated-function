@@ -1,28 +1,34 @@
 import { expectType, expectAssignable } from 'tsd'
-import isolatedFunction, {
+import createIsolatedFunction, {
   ExecutionResult,
   FailureResult,
   SuccessResult,
   Profiling,
   Logging,
   IsolatedFunctionOptions,
-  Cleanup,
+  IsolatedFunctionInstance,
   IsolatedFn
 } from '..'
 
+/* instance creation */
+
+const isolatedFunction = createIsolatedFunction()
+expectType<IsolatedFunctionInstance>(isolatedFunction)
+
+const customInstance = createIsolatedFunction({ tmpdir: '/tmp/custom' })
+expectType<IsolatedFunctionInstance>(customInstance)
+
 /* basic usage */
 
-const [fn, cleanup] = isolatedFunction(() => 2 + 2)
+const fn = isolatedFunction(() => 2 + 2)
 
 expectType<IsolatedFn>(fn)
-expectType<Cleanup>(cleanup)
 
 /* with explicit generic */
 
-const [sumFn, sumCleanup] = isolatedFunction<number>((a: number, b: number) => a + b)
+const sumFn = isolatedFunction<number>((a: number, b: number) => a + b)
 
 expectType<IsolatedFn<number>>(sumFn)
-expectType<Cleanup>(sumCleanup)
 
 /* function execution - success case */
 
@@ -46,7 +52,7 @@ if (result.isFulfilled) {
 
 /* with options */
 
-const [fnWithOptions, cleanupWithOptions] = isolatedFunction<string>(
+const fnWithOptions = isolatedFunction<string>(
   () => 'hello',
   {
     memory: 128,
@@ -57,11 +63,10 @@ const [fnWithOptions, cleanupWithOptions] = isolatedFunction<string>(
 )
 
 expectType<IsolatedFn<string>>(fnWithOptions)
-expectType<Cleanup>(cleanupWithOptions)
 
 /* error handling with throwError: false */
 
-const [errorFn, errorCleanup] = isolatedFunction<string>(
+const errorFn = isolatedFunction<string>(
   () => {
     throw new Error('test')
   },
@@ -106,13 +111,13 @@ if (execResult.isFulfilled) {
 
 /* string input */
 
-const [stringFn, stringCleanup] = isolatedFunction('() => 42')
+const stringFn = isolatedFunction('() => 42')
 
 expectType<IsolatedFn>(stringFn)
 
 /* async function */
 
-const [asyncFn, asyncCleanup] = isolatedFunction<string>(async () => {
+const asyncFn = isolatedFunction<string>(async () => {
   await new Promise(resolve => setTimeout(resolve, 100))
   return 'done'
 })
@@ -125,7 +130,7 @@ if (asyncResult.isFulfilled) {
 
 /* variadic arguments */
 
-const [variadicFn, variadicCleanup] = isolatedFunction<number>(
+const variadicFn = isolatedFunction<number>(
   (...args: number[]) => args.reduce((a, b) => a + b, 0)
 )
 
@@ -135,8 +140,8 @@ if (variadicResult.isFulfilled) {
   expectType<number>(variadicResult.value)
 }
 
-/* cleanup function */
+/* teardown */
 
-const cleanupResult = await cleanup()
+const teardownResult = await isolatedFunction.teardown()
 
-expectType<void>(cleanupResult)
+expectType<void>(teardownResult)
