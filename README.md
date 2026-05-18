@@ -16,6 +16,7 @@
       alt="NPM Status" style="max-width: 100%;"></a>
 </h3>
 
+- [Highlights](#highlights)
 - [Install](#install)
 - [Quickstart](#quickstart)
   - [Minimal privilege execution](#minimal-privilege-execution)
@@ -46,7 +47,13 @@
     - [`DEBUG`](#debug)
 - [License](#license)
 
+# Highlights
 
+- Run untrusted code in a separate process with [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
+- Automatic dependency detection, installation, and [esbuild](https://esbuild.github.io/) bundling
+- Shared persistent dependency cache across invocations
+- Memory and timeout limits with execution profiling
+- Granular permission and dependency whitelisting
 
 # Install
 
