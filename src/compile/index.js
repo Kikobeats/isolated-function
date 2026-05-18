@@ -12,6 +12,18 @@ const build = require('./build')
 
 const DEFAULT_TMPDIR = path.join(require('os').tmpdir(), 'isolated-fn-deps')
 
+const installQueues = new Map()
+
+const enqueueInstall = (tmpdir, dependencies, allow) => {
+  const pending = installQueues.get(tmpdir) || Promise.resolve()
+  const next = pending.then(() => installDependencies({ dependencies, cwd: tmpdir, allow }))
+  installQueues.set(
+    tmpdir,
+    next.catch(() => {})
+  )
+  return next
+}
+
 module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) => {
   let content = template(snippet)
 
@@ -19,7 +31,7 @@ module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) =
   if (dependencies.length) {
     content = transformDependencies(content)
     mkdirSync(tmpdir, { recursive: true })
-    await duration('npm:install', () => installDependencies({ dependencies, cwd: tmpdir, allow }), {
+    await duration('npm:install', () => enqueueInstall(tmpdir, dependencies, allow), {
       dependencies
     })
   }
