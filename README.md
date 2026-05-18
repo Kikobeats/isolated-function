@@ -52,7 +52,7 @@
 - Run untrusted code in a separate process with [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
 - Automatic dependency detection, installation, and [esbuild](https://esbuild.github.io/) bundling
 - Shared persistent dependency cache across invocations
-- Memory and timeout limits with execution profiling
+- Memory, timeout, and CPU time limits with phased execution profiling
 - Granular permission and dependency whitelisting
 
 # Install
@@ -193,12 +193,26 @@ const fn = isolatedFunction(() => {
 const { value, profiling } = await fn()
 console.log(profiling)
 // {
+//   cpu: 42.5,
 //   memory: 128204800,
-//   duration: 54.98325
+//   phases: {
+//     compile: 0,
+//     spawn: 48,
+//     run: 54,
+//     total: 102
+//   }
 // }
 ```
 
-Each execution has a profiling, which helps understand what happened.
+Each execution includes profiling data:
+
+- **cpu** — CPU time (user + system) consumed by the process, in milliseconds.
+- **memory** — Peak RSS (Resident Set Size) of the process, in bytes.
+- **phases** — Wall-clock time breakdown of each execution stage, in milliseconds:
+  - **compile** — Time waiting for code compilation (dependency detection, npm install, esbuild bundling). This is `0` after the first call since the result is cached.
+  - **spawn** — Process creation, Node.js boot, and template setup overhead.
+  - **run** — User function execution time.
+  - **total** — End-to-end wall-clock time.
 
 ## Resource limits
 
@@ -221,7 +235,7 @@ await fn()
 // =>  MemoryError: Out of memory
 ```
 
-or by execution duration:
+or by execution time:
 
 ```js
 const fn = isolatedFunction(() => {
@@ -232,6 +246,17 @@ const fn = isolatedFunction(() => {
 
 await fn(100)
 // =>  TimeoutError: Execution timed out
+```
+
+The `timeout` option enforces both a wall-clock limit (`SIGKILL`) and a CPU time limit (`RLIMIT_CPU`). A CPU-bound infinite loop will be terminated by the kernel via `SIGXCPU`:
+
+```js
+const fn = isolatedFunction(() => {
+  while (true) { Math.random() }
+}, { timeout: 5000 })
+
+await fn()
+// => CpuTimeError: CPU time limit exceeded
 ```
 
 ## Logging
@@ -342,7 +367,7 @@ When `false`, returns the error instead of throwing it as `{ value: error, isFul
 Type: `number`<br>
 Default: `Infinity`
 
-Timeout after a specified amount of time, in milliseconds.
+Timeout after a specified amount of time, in milliseconds. Enforces both a wall-clock limit (via `SIGKILL`) and a CPU time limit (via `RLIMIT_CPU`/`SIGXCPU`).
 
 #### allow
 

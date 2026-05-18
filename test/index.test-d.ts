@@ -98,8 +98,12 @@ const execResult = await fn()
 if (execResult.isFulfilled) {
   const { profiling, logging } = execResult
 
+  expectType<number>(profiling.cpu)
   expectType<number>(profiling.memory)
-  expectType<number>(profiling.duration)
+  expectType<number>(profiling.phases.compile)
+  expectType<number>(profiling.phases.spawn)
+  expectType<number>(profiling.phases.run)
+  expectType<number>(profiling.phases.total)
 
   expectType<Logging>(logging)
   expectAssignable<unknown[][] | undefined>(logging.log)

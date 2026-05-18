@@ -70,7 +70,23 @@ test('handle timeout', async t => {
   const error = await t.throwsAsync(fn())
 
   t.is(error.message, 'Execution timed out')
-  t.is(typeof error.profiling.duration, 'number')
+  t.is(typeof error.profiling.phases.total, 'number')
+})
+
+test('handle CPU time limit', async t => {
+  const fn = isolatedFunction(
+    () => {
+      while (true) {
+        Math.random()
+      }
+    },
+    { timeout: 5000 }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.true(['Execution timed out', 'CPU time limit exceeded'].includes(error.message))
+  t.is(typeof error.profiling.phases.total, 'number')
 })
 
 test('handle OOM', async t => {
@@ -92,7 +108,7 @@ test('handle OOM', async t => {
   const error = await t.throwsAsync(fn())
 
   t.is(error.message, 'Out of memory')
-  t.is(typeof error.profiling.duration, 'number')
+  t.is(typeof error.profiling.phases.total, 'number')
 })
 
 test('handle filesystem permissions', async t => {

@@ -28,6 +28,15 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
+const spawn = ({ args, env, timeout }) => {
+  const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
+  if (timeout) {
+    const seconds = Math.ceil(timeout / 1000)
+    return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-', args], spawnOpts)
+  }
+  return $('node', ['-', args], spawnOpts)
+}
+
 module.exports = ({ tmpdir } = {}) => {
   const isolatedFunction = (snippet, { timeout, memory, throwError = true, allow = {} } = {}) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
@@ -35,42 +44,59 @@ module.exports = ({ tmpdir } = {}) => {
     const compilePromise = compile(snippet, { tmpdir, allow })
 
     return async (...args) => {
-      let duration
+      let total
       try {
+        total = timeSpan()
         const content = await compilePromise
+        const compileMs = total()
 
-        duration = timeSpan()
-        const subprocess = $('node', ['-', JSON.stringify(args)], {
+        const subprocess = spawn({
+          args: JSON.stringify(args),
           env: {
             ...process.env,
             NODE_OPTIONS: flags({ memory, permissions })
           },
-          timeout,
-          killSignal: 'SIGKILL'
+          timeout
         })
+        subprocess.stdin.on('error', () => {})
         Readable.from(content).pipe(subprocess.stdin)
         const { stdout } = await subprocess
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-        profiling.duration = duration()
+        const totalMs = total()
+        const { run, ...rest } = profiling
+        const result = {
+          ...rest,
+          phases: {
+            compile: compileMs,
+            spawn: totalMs - compileMs - run,
+            run,
+            total: totalMs
+          }
+        }
         debug('node', {
-          memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`,
-          duration: `${Math.round(profiling.duration / 100)}s`
+          cpu: `${Math.round(result.cpu)}ms`,
+          memory: `${Math.round(result.memory / (1024 * 1024))}MiB`,
+          phases: `compile=${Math.round(result.phases.compile)}ms spawn=${Math.round(
+            result.phases.spawn
+          )}ms run=${Math.round(result.phases.run)}ms total=${Math.round(result.phases.total)}ms`
         })
 
         return isFulfilled
-          ? { isFulfilled, value, profiling, logging }
+          ? { isFulfilled, value, profiling: result, logging }
           : throwError
             ? (() => {
                 throw deserializeError(value)
               })()
-            : { isFulfilled: false, value: deserializeError(value), profiling, logging }
+            : { isFulfilled: false, value: deserializeError(value), profiling: result, logging }
       } catch (error) {
         debug.error(serializeError(error))
+        const profiling = { phases: { total: total() } }
+
         if (error.signalCode === 'SIGTRAP') {
           throw createError({
             name: 'MemoryError',
             message: 'Out of memory',
-            profiling: { duration: duration() }
+            profiling
           })
         }
 
@@ -78,7 +104,15 @@ module.exports = ({ tmpdir } = {}) => {
           throw createError({
             name: 'TimeoutError',
             message: 'Execution timed out',
-            profiling: { duration: duration() }
+            profiling
+          })
+        }
+
+        if (error.signalCode === 'SIGXCPU') {
+          throw createError({
+            name: 'CpuTimeError',
+            message: 'CPU time limit exceeded',
+            profiling
           })
         }
 
@@ -92,7 +126,7 @@ module.exports = ({ tmpdir } = {}) => {
           throw createError({
             name: 'PermissionError',
             message: `Access to '${permission}' has been restricted`,
-            profiling: { duration: duration() }
+            profiling
           })
         }
 
