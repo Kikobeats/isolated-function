@@ -10,7 +10,7 @@ const detectDependencies = require('../src/compile/detect-dependencies')
 const template = require('../src/template')
 const build = require('../src/compile/build')
 
-const createIsolatedFunction = require('..')
+const compile = require('../src/compile')
 
 // @browserless/function template — generates the actual source that isolated-function compiles
 // see: packages/function/src/template.js
@@ -82,13 +82,7 @@ const compileBefore = async snippet => {
   return content
 }
 
-const compileAfter = (() => {
-  const isolatedFunction = createIsolatedFunction()
-  return async snippet => {
-    const fn = isolatedFunction(snippet)
-    return fn
-  }
-})()
+const compileAfter = snippet => compile(snippet, { allow: {} })
 
 const fmt = ms => {
   if (ms < 1) return `${(ms * 1000).toFixed(0)}µs`
