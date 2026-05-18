@@ -56,3 +56,41 @@ test('child-process', async t => {
   const { value } = await fn()
   t.is(value, 200)
 })
+
+test('worker', async t => {
+  const fn = isolatedFunction(
+    () => {
+      const { Worker, isMainThread } = require('worker_threads')
+      if (isMainThread) {
+        return new Promise(resolve => {
+          const worker = new Worker(
+            'const { parentPort } = require("worker_threads"); parentPort.postMessage("hello")',
+            { eval: true }
+          )
+          worker.on('message', resolve)
+        })
+      }
+    },
+    {
+      allow: { permissions: ['worker'] }
+    }
+  )
+
+  const { value } = await fn()
+  t.is(value, 'hello')
+})
+
+test('fs-read with path scope', async t => {
+  const fn = isolatedFunction(
+    () => {
+      const fs = require('fs')
+      return fs.readFileSync('/etc/hosts', 'utf8').length > 0
+    },
+    {
+      allow: { permissions: ['fs-read=/etc/hosts'] }
+    }
+  )
+
+  const { value } = await fn()
+  t.true(value)
+})

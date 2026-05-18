@@ -23,6 +23,7 @@ const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permi
 const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (memory) flags.push(`--max-old-space-size=${memory}`)
+  if (permissions.includes('ffi')) flags.push('--experimental-ffi')
   permissions.forEach(resource => flags.push(`--allow-${resource}`))
   return flags.join(' ')
 }

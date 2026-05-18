@@ -119,16 +119,25 @@ test('handle filesystem permissions', async t => {
 })
 
 test('handle child process', async t => {
-  {
-    const fn = isolatedFunction(() => {
-      const { execSync } = require('child_process')
-      return execSync('echo hello').toString()
-    })
+  const fn = isolatedFunction(() => {
+    const { execSync } = require('child_process')
+    return execSync('echo hello').toString()
+  })
 
-    const error = await t.throwsAsync(fn())
+  const error = await t.throwsAsync(fn())
 
-    t.is(error.message, "Access to 'ChildProcess' has been restricted")
-  }
+  t.is(error.message, "Access to 'ChildProcess' has been restricted")
+})
+
+test('handle worker threads', async t => {
+  const fn = isolatedFunction(() => {
+    const { Worker } = require('worker_threads')
+    new Worker('', { eval: true })
+  })
+
+  const error = await t.throwsAsync(fn())
+
+  t.is(error.message, "Access to 'WorkerThreads' has been restricted")
 })
 
 test('handle untrusted dependencies', async t => {

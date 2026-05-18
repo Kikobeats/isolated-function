@@ -1,0 +1,2 @@
+overrides:
+  c8>yargs: "npm:yargs@18"
