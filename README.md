@@ -95,15 +95,6 @@ await fn()
 // => PermissionError: Access to 'FileSystemWrite' has been restricted.
 ```
 
-If you exceed your limit, an error will occur. Any of the following interaction will throw an error:
-
-- Native modules
-- Child process
-- Worker Threads
-- Inspector protocol
-- File system access
-- WASI
-
 ## Granting specific permissions
 
 You can grant specific permissions to the isolated function using the `allow.permissions` option:
@@ -385,14 +376,32 @@ An array of permissions to grant to the isolated function based on [Node.js Opti
 
 When empty, the function runs with minimal privileges and will throw an error if it attempts to access restricted resources. Available permissions are:
 
-- `addons`
-- `child-process`
-- `fs-read`
-- `fs-write`
-- `inspector`
-- `net`
-- `wasi`
-- `worker`
+- `addons` — e.g. <small>*`require('native-module')`*</small><br/>
+  Allow loading native C++ addons.
+
+- `child-process` — e.g. <small>*`execSync('echo hello')`*</small><br/>
+  Allow spawning child processes via `child_process` module.
+
+- `ffi` *(Node.js v26+)* — e.g. <small>*`ffi.open('libc.so')`*</small><br/>
+  Allow foreign function interface calls to shared libraries.
+
+- `fs-read` — e.g. <small>*`fs.readFileSync('/etc/hosts')`*</small><br/>
+  Allow reading from the filesystem. Supports path scoping: `fs-read=/etc/hosts`.
+
+- `fs-write` — e.g. <small>*`fs.writeFileSync('/tmp/out.txt', data)`*</small><br/>
+  Allow writing to the filesystem. Supports path scoping: `fs-write=/tmp`.
+
+- `inspector` — e.g. <small>*`require('inspector').open()`*</small><br/>
+  Allow the inspector protocol for debugging.
+
+- `net` *(Node.js v25+)* — e.g. <small>*`http.get('http://example.com')`*</small><br/>
+  Allow outbound network connections.
+
+- `wasi` — e.g. <small>*`new WASI({ args, env })`*</small><br/>
+  Allow WebAssembly System Interface operations.
+
+- `worker` — e.g. <small>*`new Worker('./task.js')`*</small><br/>
+  Allow creating worker threads.
 
 ##### dependencies
 
