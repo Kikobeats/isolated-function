@@ -3,6 +3,7 @@
 const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { Readable } = require('node:stream')
+const { rm } = require('fs/promises')
 const $ = require('tinyspawn')
 
 const compile = require('./compile')
@@ -26,78 +27,84 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
-module.exports = (snippet, { tmpdir, timeout, memory, throwError = true, allow = {} } = {}) => {
-  if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
-  const { permissions = [] } = allow
-  const compilePromise = compile(snippet, { tmpdir, allow })
+module.exports = ({ tmpdir } = {}) => {
+  const isolatedFunction = (snippet, { timeout, memory, throwError = true, allow = {} } = {}) => {
+    if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
+    const { permissions = [] } = allow
+    const compilePromise = compile(snippet, { tmpdir, allow })
 
-  const fn = async (...args) => {
-    let duration
-    try {
-      const { content, cleanupPromise } = await compilePromise
+    return async (...args) => {
+      let duration
+      try {
+        const content = await compilePromise
 
-      duration = timeSpan()
-      const subprocess = $('node', ['-', JSON.stringify(args)], {
-        env: {
-          ...process.env,
-          NODE_OPTIONS: flags({ memory, permissions })
-        },
-        timeout,
-        killSignal: 'SIGKILL'
-      })
-      Readable.from(content).pipe(subprocess.stdin)
-      const [{ stdout }] = await Promise.all([subprocess, cleanupPromise])
-      const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-      profiling.duration = duration()
-      debug('node', {
-        memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`,
-        duration: `${Math.round(profiling.duration / 100)}s`
-      })
-
-      return isFulfilled
-        ? { isFulfilled, value, profiling, logging }
-        : throwError
-          ? (() => {
-              throw deserializeError(value)
-            })()
-          : { isFulfilled: false, value: deserializeError(value), profiling, logging }
-    } catch (error) {
-      debug.error(serializeError(error))
-      if (error.signalCode === 'SIGTRAP') {
-        throw createError({
-          name: 'MemoryError',
-          message: 'Out of memory',
-          profiling: { duration: duration() }
+        duration = timeSpan()
+        const subprocess = $('node', ['-', JSON.stringify(args)], {
+          env: {
+            ...process.env,
+            NODE_OPTIONS: flags({ memory, permissions })
+          },
+          timeout,
+          killSignal: 'SIGKILL'
         })
-      }
-
-      if (error.signalCode === 'SIGKILL') {
-        throw createError({
-          name: 'TimeoutError',
-          message: 'Execution timed out',
-          profiling: { duration: duration() }
+        Readable.from(content).pipe(subprocess.stdin)
+        const { stdout } = await subprocess
+        const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
+        profiling.duration = duration()
+        debug('node', {
+          memory: `${Math.round(profiling.memory / (1024 * 1024))}MiB`,
+          duration: `${Math.round(profiling.duration / 100)}s`
         })
+
+        return isFulfilled
+          ? { isFulfilled, value, profiling, logging }
+          : throwError
+            ? (() => {
+                throw deserializeError(value)
+              })()
+            : { isFulfilled: false, value: deserializeError(value), profiling, logging }
+      } catch (error) {
+        debug.error(serializeError(error))
+        if (error.signalCode === 'SIGTRAP') {
+          throw createError({
+            name: 'MemoryError',
+            message: 'Out of memory',
+            profiling: { duration: duration() }
+          })
+        }
+
+        if (error.signalCode === 'SIGKILL') {
+          throw createError({
+            name: 'TimeoutError',
+            message: 'Execution timed out',
+            profiling: { duration: duration() }
+          })
+        }
+
+        if (error.code === 'ERR_ACCESS_DENIED') {
+          const permission = error.permission
+            ? error.permission
+            : error.message.includes('getaddrinfo')
+              ? 'network'
+              : undefined
+
+          throw createError({
+            name: 'PermissionError',
+            message: `Access to '${permission}' has been restricted`,
+            profiling: { duration: duration() }
+          })
+        }
+
+        throw error
       }
-
-      if (error.code === 'ERR_ACCESS_DENIED') {
-        const permission = error.permission
-          ? error.permission
-          : error.message.includes('getaddrinfo')
-            ? 'network'
-            : undefined
-
-        throw createError({
-          name: 'PermissionError',
-          message: `Access to '${permission}' has been restricted`,
-          profiling: { duration: duration() }
-        })
-      }
-
-      throw error
     }
   }
 
-  const cleanup = async () => (await compilePromise).cleanup
+  isolatedFunction.teardown = async () => {
+    const { DEFAULT_TMPDIR } = compile
+    const dir = tmpdir || DEFAULT_TMPDIR
+    await rm(dir, { recursive: true, force: true })
+  }
 
-  return [fn, cleanup]
+  return isolatedFunction
 }

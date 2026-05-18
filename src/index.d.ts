@@ -39,48 +39,42 @@ export interface FailureResult {
   logging: Logging
 }
 
-/**
- * Execution result (success or failure)
- */
 export type ExecutionResult<T = unknown> = SuccessResult<T> | FailureResult
 
-/**
- * Allow configuration for permissions and dependencies
- */
 export interface AllowOptions {
   /**
-   * Array of Node.js permissions to grant to the isolated function.
-   * Available permissions: addons, child-process, fs-read, fs-write, inspector, net, wasi, worker
+   * Permissions to grant to the isolated function.
+   * Available: addons, child-process, fs-read, fs-write, inspector, net, wasi, worker
    */
   permissions?: string[]
   /**
-   * List of allowed npm package names that can be installed.
-   * When provided, only these packages can be required/imported.
-   * This prevents arbitrary package installation which could lead to RCE.
+   * Whitelist of npm package names allowed to be installed.
+   * Prevents arbitrary package installation from untrusted code.
    */
   dependencies?: string[]
+}
+
+/**
+ * Options for creating an isolated-function instance
+ */
+export interface CreateOptions {
+  /** Directory for installing code dependencies. Reused across invocations. */
+  tmpdir?: string
 }
 
 /**
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {
-  /** Temporary directory configuration */
-  tmpdir?: () => Promise<{ cwd: string; cleanup: () => Promise<void> }>
   /** Execution timeout in milliseconds */
   timeout?: number
   /** Memory limit in megabytes */
   memory?: number
-  /** When false, errors are returned instead of thrown */
+  /** When false, returns the error instead of throwing it */
   throwError?: boolean
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
 }
-
-/**
- * Cleanup function to release resources
- */
-export type Cleanup = () => Promise<void>
 
 /**
  * Isolated function that can be executed with arguments
@@ -89,42 +83,28 @@ export type IsolatedFn<T = unknown> = (
   ...args: unknown[]
 ) => Promise<SuccessResult<T> | FailureResult>
 
+export interface IsolatedFunctionInstance {
+  <T = unknown>(snippet: Function | string, options?: IsolatedFunctionOptions): IsolatedFn<T>
+  /** Removes the shared dependencies directory */
+  teardown(): Promise<void>
+}
+
 /**
- * Creates an isolated function that runs untrusted code in a separate Node.js process.
- *
- * @param snippet - The function or code string to run in isolation
- * @param options - Configuration options for the isolated function
- * @returns A tuple containing the isolated function and a cleanup function
+ * Creates an isolated-function instance for running untrusted code in separate Node.js processes.
  *
  * @example
  * ```js
- * const [sum, cleanup] = isolatedFunction((a, b) => a + b, {
+ * const isolatedFunction = require('isolated-function')()
+ *
+ * const sum = isolatedFunction((a, b) => a + b, {
  *   memory: 128,
  *   timeout: 10000
  * })
  *
  * const { value } = await sum(3, 2)
- * console.log(value) // 5
- * await cleanup()
- * ```
- *
- * @example
- * ```js
- * // With error handling
- * const [fn, cleanup] = isolatedFunction(() => {
- *   throw new Error('oh no!')
- * }, { throwError: false })
- *
- * const result = await fn()
- * if (!result.isFulfilled) {
- *   console.error(result.value)
- * }
- * await cleanup()
+ * await isolatedFunction.teardown()
  * ```
  */
-declare function isolatedFunction<T = unknown>(
-  snippet: Function | string,
-  options?: IsolatedFunctionOptions
-): [IsolatedFn<T>, Cleanup]
+declare function createIsolatedFunction(options?: CreateOptions): IsolatedFunctionInstance
 
-export default isolatedFunction
+export default createIsolatedFunction

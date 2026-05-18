@@ -27,19 +27,20 @@
   - [Logging](#logging)
   - [Error handling](#error-handling)
 - [API](#api)
-  - [isolatedFunction(code, \[options\])](#isolatedfunctioncode-options)
-    - [code](#code)
+  - [isolatedFunction(\[options\])](#isolatedfunctionoptions)
     - [options](#options)
+      - [tmpdir](#tmpdir)
+  - [=\> instance(code, \[options\])](#-instancecode-options)
+    - [code](#code)
+    - [options](#options-1)
       - [memory](#memory)
       - [throwError](#throwerror)
       - [timeout](#timeout)
-      - [tmpdir](#tmpdir)
       - [allow](#allow)
         - [permissions](#permissions)
         - [dependencies](#dependencies)
-  - [=\> (fn(\[...args\]), teardown())](#-fnargs-teardown)
-    - [fn](#fn)
-    - [teardown](#teardown)
+  - [=\> fn(\[...args\])](#-fnargs)
+  - [instance.teardown()](#instanceteardown)
 - [Environment Variables](#environment-variables)
     - [`ISOLATED_FUNCTIONS_MINIFY`](#isolated_functions_minify)
     - [`DEBUG`](#debug)
@@ -58,10 +59,10 @@ npm install isolated-function --save
 **isolated-function** is a modern solution for running untrusted code in Node.js.
 
 ```js
-const isolatedFunction = require('isolated-function')
+const isolatedFunction = require('isolated-function')()
 
 /* create an isolated-function, with resources limitation */
-const [sum, teardown] = isolatedFunction((y, z) => y + z, {
+const sum = isolatedFunction((y, z) => y + z, {
   memory: 128, // in MB
   timeout: 10000 // in milliseconds
 })
@@ -69,8 +70,8 @@ const [sum, teardown] = isolatedFunction((y, z) => y + z, {
 /* interact with the isolated-function */
 const { value, profiling } = await sum(3, 2)
 
-/* close resources associated with the isolated-function initialization */
-await teardown()
+/* close all resources on shutdown */
+await isolatedFunction.teardown()
 ```
 
 ## Minimal privilege execution
@@ -78,7 +79,7 @@ await teardown()
 The hosted code runs in a separate process, with minimal privilege, using [Node.js permission model API](https://nodejs.org/api/permissions.html#permission-model).
 
 ```js
-const [fn, teardown] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   const fs = require('fs')
   fs.writeFileSync('/etc/passwd', 'foo')
 })
@@ -101,7 +102,7 @@ If you exceed your limit, an error will occur. Any of the following interaction 
 You can grant specific permissions to the isolated function using the `allow.permissions` option:
 
 ```js
-const [fn, teardown] = isolatedFunction(
+const fn = isolatedFunction(
   () => {
     const { execSync } = require('child_process')
     return execSync('echo hello').toString().trim()
@@ -113,7 +114,6 @@ const [fn, teardown] = isolatedFunction(
 
 const { value } = await fn()
 console.log(value) // 'hello'
-await teardown()
 ```
 
 See [#allow.permissions](#permissions) to know more.
@@ -123,7 +123,7 @@ See [#allow.permissions](#permissions) to know more.
 The hosted code is parsed for detecting `require`/`import` calls and install these dependencies:
 
 ```js
-const [isEmoji, teardown] = isolatedFunction(input => {
+const isEmoji = isolatedFunction(input => {
   /* this dependency only exists inside the isolated function */
   const isEmoji = require('is-standard-emoji@1.0.0') // default is latest
   return isEmoji(input)
@@ -131,17 +131,18 @@ const [isEmoji, teardown] = isolatedFunction(input => {
 
 await isEmoji('🙌') // => true
 await isEmoji('foo') // => false
-await teardown()
 ```
 
 The dependencies, along with the hosted code, are bundled by [esbuild](https://esbuild.github.io/) into a single file that will be evaluated at runtime.
+
+Dependencies are installed into a shared persistent directory and reused across invocations, so only the first call that requires a given package pays the install cost.
 
 ## Restricting allowed dependencies
 
 When running untrusted code, you should restrict which npm packages can be installed to prevent supply chain attacks:
 
 ```js
-const [fn, teardown] = isolatedFunction(
+const fn = isolatedFunction(
   input => {
     const isEmoji = require('is-standard-emoji')
     return isEmoji(input)
@@ -152,13 +153,12 @@ const [fn, teardown] = isolatedFunction(
 )
 
 await fn('🙌') // => true
-await teardown()
 ```
 
 If the code tries to require a package not in the allowed list, a `DependencyUnallowedError` is thrown **before** any npm install happens:
 
 ```js
-const [fn, teardown] = isolatedFunction(
+const fn = isolatedFunction(
   () => {
     const malicious = require('malicious-package')
     return malicious()
@@ -180,7 +180,7 @@ Any hosted code execution will be run in their own separate process:
 
 ```js
 /** make a function to consume ~128MB */
-const [fn, teardown] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   const storage = []
   const oneMegabyte = 1024 * 1024
   while (storage.length < 78) {
@@ -191,7 +191,6 @@ const [fn, teardown] = isolatedFunction(() => {
     storage.push(array)
   }
 })
-t.teardown(cleanup)
 
 const { value, profiling } = await fn()
 console.log(profiling)
@@ -208,7 +207,7 @@ Each execution has a profiling, which helps understand what happened.
 You can limit a **isolated-function** by memory:
 
 ```js
-const [fn, teardown] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   const storage = []
   const oneMegabyte = 1024 * 1024
   while (storage.length < 78) {
@@ -227,7 +226,7 @@ await fn()
 or by execution duration:
 
 ```js
-const [fn, teardown] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
   await delay(duration)
   return 'done'
@@ -242,7 +241,7 @@ await fn(100)
 The logs are collected into a `logging` object returned after the execution:
 
 ```js
-const [fn, teardown] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   console.log('console.log')
   console.info('console.info')
   console.debug('console.debug')
@@ -251,7 +250,7 @@ const [fn, teardown] = isolatedFunction(() => {
   return 'done'
 })
 
-const { logging } await fn()
+const { logging } = await fn()
 
 console.log(logging)
 // {
@@ -268,7 +267,7 @@ console.log(logging)
 Any error during **isolated-function** execution will be propagated:
 
 ```js
-const [fn, cleanup] = isolatedFunction(() => {
+const fn = isolatedFunction(() => {
   throw new TypeError('oh no!')
 })
 
@@ -279,13 +278,16 @@ const result = await fn()
 You can also return the error instead of throwing it with `{ throwError: false }`:
 
 ```js
-const [fn, cleanup] = isolatedFunction(() => {
-  throw new TypeError('oh no!')
-})
+const fn = isolatedFunction(
+  () => {
+    throw new TypeError('oh no!')
+  },
+  { throwError: false }
+)
 
-const { isFullfiled, value } = await fn()
+const { isFulfilled, value } = await fn()
 
-if (!isFufilled) {
+if (!isFulfilled) {
   console.error(value)
   // TypeError: oh no!
 }
@@ -293,7 +295,26 @@ if (!isFufilled) {
 
 # API
 
-## isolatedFunction(code, [options])
+## isolatedFunction([options])
+
+Creates an isolated-function instance. All functions created from the same instance share the same dependencies directory.
+
+### options
+
+#### tmpdir
+
+Type: `string`<br>
+Default: `path.join(os.tmpdir(), 'isolated-fn-deps')`
+
+The directory used for installing code dependencies. Dependencies are installed once and reused across invocations, so only the first call that requires a given package pays the install cost.
+
+```js
+const isolatedFunction = require('isolated-function')({
+  tmpdir: '/tmp/my-isolated-deps'
+})
+```
+
+## => instance(code, [options])
 
 ### code
 
@@ -314,13 +335,9 @@ Set the function memory limit, in megabytes.
 #### throwError
 
 Type: `boolean`<br>
-Default: `false`
+Default: `true`
 
-When is `true`, it returns the error rather than throw it.
-
-The error will be accessible against `{ value: error, isFufilled: false }` object.
-
-Set the function memory limit, in megabytes.
+When `false`, returns the error instead of throwing it as `{ value: error, isFulfilled: false }`.
 
 #### timeout
 
@@ -328,23 +345,6 @@ Type: `number`<br>
 Default: `Infinity`
 
 Timeout after a specified amount of time, in milliseconds.
-
-#### tmpdir
-
-Type: `function`<br>
-
-It setup the temporal folder to be used for installing code dependencies.
-
-The default implementation is:
-
-```js
-const tmpdir = async () => {
-  const cwd = await fs.mkdtemp(path.join(require('os').tmpdir(), 'compile-'))
-  await fs.mkdir(cwd, { recursive: true })
-  const cleanup = () => fs.rm(cwd, { recursive: true, force: true })
-  return { cwd, cleanup }
-}
-```
 
 #### allow
 
@@ -354,7 +354,7 @@ Default: `{}`
 Configuration object for allowed permissions and dependencies.
 
 ```js
-const [fn, cleanup] = isolatedFunction(
+const fn = isolatedFunction(
   () => {
     const { execSync } = require('child_process')
     const lodash = require('lodash')
@@ -387,20 +387,6 @@ When empty, the function runs with minimal privileges and will throw an error if
 - `wasi`
 - `worker`
 
-Example:
-
-```js
-const [fn, cleanup] = isolatedFunction(
-  async () => {
-    const http = require('node:http')
-    // Network request code here
-  },
-  {
-    allow: { permissions: ['net'] }
-  }
-)
-```
-
 ##### dependencies
 
 Type: `string[]`<br>
@@ -411,7 +397,7 @@ A whitelist of npm package names that are allowed to be installed. When provided
 This is a critical security feature when running untrusted code, as it prevents arbitrary package installation which could lead to remote code execution via malicious packages.
 
 ```js
-const [fn, cleanup] = isolatedFunction(
+const fn = isolatedFunction(
   () => {
     const lodash = require('lodash')
     const axios = require('axios')
@@ -425,19 +411,21 @@ const [fn, cleanup] = isolatedFunction(
 
 When `allow.dependencies` is not provided, any package can be installed (default behavior for backwards compatibility).
 
-## => (fn([...args]), teardown())
-
-### fn
+## => fn([...args])
 
 Type: `function`
 
 The isolated function to execute. You can pass arguments over it.
 
-### teardown
+## instance.teardown()
 
 Type: `function`
 
-A function to be called to release resources associated with the **isolated-function**.
+Removes the shared dependencies directory. Call this once when shutting down the server to clean up resources.
+
+```js
+await isolatedFunction.teardown()
+```
 
 # Environment Variables
 

@@ -2,12 +2,12 @@
 
 const test = require('ava')
 
-const isolatedFunction = require('..')
+const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 test('child-process', async t => {
-  const [fn, cleanup] = isolatedFunction(
+  const fn = isolatedFunction(
     () => {
       const { execSync } = require('child_process')
       return execSync('echo hello').toString().trim()
@@ -17,13 +17,11 @@ test('child-process', async t => {
     }
   )
 
-  t.teardown(cleanup)
-
   const { value } = await fn()
   t.is(value, 'hello')
 })
 ;(nodeMajor >= 25 ? test : test.skip)('network', async t => {
-  const [fn, cleanup] = isolatedFunction(
+  const fn = isolatedFunction(
     async () => {
       function doFetch (url) {
         return new Promise((resolve, reject) => {
@@ -54,8 +52,6 @@ test('child-process', async t => {
       allow: { permissions: ['net'] }
     }
   )
-
-  t.teardown(cleanup)
 
   const { value } = await fn()
   t.is(value, 200)
