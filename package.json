@@ -48,12 +48,21 @@
     "@commitlint/cli": "latest",
     "@commitlint/config-conventional": "latest",
     "ava": "7",
+    "browser-sync": "latest",
     "c8": "latest",
     "ci-publish": "latest",
+    "concurrently": "latest",
+    "cssnano": "latest",
+    "cssnano-preset-advanced": "latest",
     "finepack": "latest",
     "git-authors-cli": "latest",
     "github-generate-release": "latest",
+    "gulp": "latest",
+    "gulp-concat": "latest",
+    "gulp-postcss": "latest",
+    "gulp-uglify": "latest",
     "nano-staged": "latest",
+    "postcss-focus": "latest",
     "simple-git-hooks": "latest",
     "standard": "latest",
     "standard-version": "latest",
@@ -66,9 +75,12 @@
     "src"
   ],
   "scripts": {
+    "build": "gulp build",
     "clean": "rm -rf node_modules",
     "contributors": "(npx git-authors-cli && npx finepack && git add package.json && git commit -m 'build: contributors' --no-verify) || true",
     "coverage": "c8 report --reporter=text-lcov > coverage/lcov.info",
+    "dev": "concurrently \"gulp\" \"npm run dev:server\"",
+    "dev:server": "browser-sync start --server docs --files \"docs/index.html, docs/README.md, docs/static/**/*.(css|js)\"",
     "lint": "standard && tsd",
     "postrelease": "npm run release:tags && npm run release:github && (ci-publish || npm publish --access=public)",
     "pretest": "npm run lint",
@@ -103,6 +115,11 @@
   "simple-git-hooks": {
     "commit-msg": "npx commitlint --edit",
     "pre-commit": "npx nano-staged"
+  },
+  "standard": {
+    "ignore": [
+      "docs/static/main.min.js"
+    ]
   },
   "tsd": {
     "directory": "test"

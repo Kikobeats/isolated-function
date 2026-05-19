@@ -1,0 +1,30 @@
+# isolated-function
+
+> Run untrusted code in a Node.js v8 sandbox with strict resource and capability controls.
+
+isolated-function is a Node.js library for executing untrusted JavaScript in an isolated process with explicit limits and allowlists.
+
+It is designed for:
+
+- AI agent tool execution where user-provided code must run safely
+- plugin systems that need constrained runtime permissions
+- sandboxed code evaluation for automation workflows
+- backend systems that require dependency allowlists and deterministic limits
+
+Key capabilities:
+
+- separate process execution for untrusted code
+- memory, timeout, and CPU resource limits
+- Node.js permission model integration with granular allowlists
+- automatic dependency detection and install with shared cache
+- optional dependency allowlist to prevent unsafe package usage
+- execution profiling with compile, spawn, run, and total timings
+
+Primary page:
+
+- Docs and landing page: https://kikobeats.github.io/isolated-function/
+
+Source and package:
+
+- GitHub: https://github.com/Kikobeats/isolated-function
+- npm: https://www.npmjs.com/package/isolated-function
