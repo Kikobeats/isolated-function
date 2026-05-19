@@ -48,8 +48,8 @@ module.exports = ({ tmpdir } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
-        const installAndBuildMs = total()
 
+        const spawnElapsed = timeSpan()
         const subprocess = spawn({
           args: JSON.stringify(args),
           env: {
@@ -61,28 +61,20 @@ module.exports = ({ tmpdir } = {}) => {
         subprocess.stdin.on('error', () => {})
         Readable.from(compiled.content).pipe(subprocess.stdin)
         const { stdout } = await subprocess
+        const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-        const totalMs = total()
         const { run, ...rest } = profiling
         const result = {
           ...rest,
           phases: {
             install: compiled.install,
             build: compiled.build,
-            spawn: totalMs - installAndBuildMs - run,
+            spawn: spawnMs - run,
             run,
-            total: totalMs
+            total: total()
           }
         }
-        debug('node', {
-          cpu: `${Math.round(result.cpu)}ms`,
-          memory: `${Math.round(result.memory / (1024 * 1024))}MiB`,
-          phases: `install=${Math.round(result.phases.install)}ms build=${Math.round(
-            result.phases.build
-          )}ms spawn=${Math.round(result.phases.spawn)}ms run=${Math.round(
-            result.phases.run
-          )}ms total=${Math.round(result.phases.total)}ms`
-        })
+        debug('node', { cpu: result.cpu, memory: result.memory, ...result.phases })
 
         return isFulfilled
           ? { isFulfilled, value, profiling: result, logging }
