@@ -26,22 +26,27 @@ const enqueueInstall = (tmpdir, dependencies, allow) => {
 
 module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) => {
   let content = template(snippet)
+  let installMs = 0
 
   const dependencies = detectDependencies(content)
   if (dependencies.length) {
     content = transformDependencies(content)
     mkdirSync(tmpdir, { recursive: true })
+    const installStart = Date.now()
     await duration('npm:install', () => enqueueInstall(tmpdir, dependencies, allow), {
       dependencies
     })
+    installMs = Date.now() - installStart
   }
 
   const cwd = dependencies.length ? tmpdir : process.cwd()
+  const buildStart = Date.now()
   const result = await duration('esbuild', () => build({ content, cwd }))
+  const buildMs = Date.now() - buildStart
   debug('esbuild:output', { content: result.outputFiles[0].text.length })
   content = result.outputFiles[0].text
 
-  return content
+  return { content, install: installMs, build: buildMs }
 }
 
 module.exports.DEFAULT_TMPDIR = DEFAULT_TMPDIR

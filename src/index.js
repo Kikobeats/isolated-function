@@ -47,8 +47,8 @@ module.exports = ({ tmpdir } = {}) => {
       let total
       try {
         total = timeSpan()
-        const content = await compilePromise
-        const compileMs = total()
+        const compiled = await compilePromise
+        const installAndBuildMs = total()
 
         const subprocess = spawn({
           args: JSON.stringify(args),
@@ -59,7 +59,7 @@ module.exports = ({ tmpdir } = {}) => {
           timeout
         })
         subprocess.stdin.on('error', () => {})
-        Readable.from(content).pipe(subprocess.stdin)
+        Readable.from(compiled.content).pipe(subprocess.stdin)
         const { stdout } = await subprocess
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
         const totalMs = total()
@@ -67,8 +67,9 @@ module.exports = ({ tmpdir } = {}) => {
         const result = {
           ...rest,
           phases: {
-            compile: compileMs,
-            spawn: totalMs - compileMs - run,
+            install: compiled.install,
+            build: compiled.build,
+            spawn: totalMs - installAndBuildMs - run,
             run,
             total: totalMs
           }
@@ -76,9 +77,11 @@ module.exports = ({ tmpdir } = {}) => {
         debug('node', {
           cpu: `${Math.round(result.cpu)}ms`,
           memory: `${Math.round(result.memory / (1024 * 1024))}MiB`,
-          phases: `compile=${Math.round(result.phases.compile)}ms spawn=${Math.round(
-            result.phases.spawn
-          )}ms run=${Math.round(result.phases.run)}ms total=${Math.round(result.phases.total)}ms`
+          phases: `install=${Math.round(result.phases.install)}ms build=${Math.round(
+            result.phases.build
+          )}ms spawn=${Math.round(result.phases.spawn)}ms run=${Math.round(
+            result.phases.run
+          )}ms total=${Math.round(result.phases.total)}ms`
         })
 
         return isFulfilled
