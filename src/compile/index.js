@@ -6,6 +6,7 @@ const path = require('path')
 const transformDependencies = require('./transform-dependencies')
 const installDependencies = require('./install-dependencies')
 const detectDependencies = require('./detect-dependencies')
+const timeSpan = require('@kikobeats/time-span')()
 const { debug, duration } = require('../debug')
 const template = require('../template')
 const build = require('./build')
@@ -26,22 +27,27 @@ const enqueueInstall = (tmpdir, dependencies, allow) => {
 
 module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) => {
   let content = template(snippet)
+  const phases = { install: 0 }
 
   const dependencies = detectDependencies(content)
   if (dependencies.length) {
     content = transformDependencies(content)
     mkdirSync(tmpdir, { recursive: true })
+    const elapsed = timeSpan()
     await duration('npm:install', () => enqueueInstall(tmpdir, dependencies, allow), {
       dependencies
     })
+    phases.install = elapsed()
   }
 
   const cwd = dependencies.length ? tmpdir : process.cwd()
+  const elapsed = timeSpan()
   const result = await duration('esbuild', () => build({ content, cwd }))
+  phases.build = elapsed()
   debug('esbuild:output', { content: result.outputFiles[0].text.length })
   content = result.outputFiles[0].text
 
-  return content
+  return { content, phases }
 }
 
 module.exports.DEFAULT_TMPDIR = DEFAULT_TMPDIR

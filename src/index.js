@@ -47,9 +47,9 @@ module.exports = ({ tmpdir } = {}) => {
       let total
       try {
         total = timeSpan()
-        const content = await compilePromise
-        const compileMs = total()
+        const compiled = await compilePromise
 
+        const spawnElapsed = timeSpan()
         const subprocess = spawn({
           args: JSON.stringify(args),
           env: {
@@ -59,27 +59,21 @@ module.exports = ({ tmpdir } = {}) => {
           timeout
         })
         subprocess.stdin.on('error', () => {})
-        Readable.from(content).pipe(subprocess.stdin)
+        Readable.from(compiled.content).pipe(subprocess.stdin)
         const { stdout } = await subprocess
+        const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-        const totalMs = total()
         const { run, ...rest } = profiling
         const result = {
           ...rest,
           phases: {
-            compile: compileMs,
-            spawn: totalMs - compileMs - run,
+            ...compiled.phases,
+            spawn: spawnMs - run,
             run,
-            total: totalMs
+            total: total()
           }
         }
-        debug('node', {
-          cpu: `${Math.round(result.cpu)}ms`,
-          memory: `${Math.round(result.memory / (1024 * 1024))}MiB`,
-          phases: `compile=${Math.round(result.phases.compile)}ms spawn=${Math.round(
-            result.phases.spawn
-          )}ms run=${Math.round(result.phases.run)}ms total=${Math.round(result.phases.total)}ms`
-        })
+        debug('node', { cpu: result.cpu, memory: result.memory, ...result.phases })
 
         return isFulfilled
           ? { isFulfilled, value, profiling: result, logging }
