@@ -2,7 +2,7 @@
 
 ![isolated-function logo](static/logo.png)
 
-# isolated functions
+# isolated function
 
 > A modern solution for running untrusted code in Node.js
 

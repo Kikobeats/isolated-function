@@ -113,7 +113,7 @@ const enhancePage = () => {
   }
 
   if (appNameLink) {
-    appNameLink.setAttribute('aria-label', 'isolated functions home')
+    appNameLink.setAttribute('aria-label', 'isolated function home')
   }
 
   setupSidebarHighlight()
