@@ -120,6 +120,10 @@ test('memory profiling', async t => {
   const { value, profiling } = await fn()
 
   t.is(value, undefined)
+  t.is(typeof profiling.cpu, 'number')
   t.is(typeof profiling.memory, 'number')
-  t.is(typeof profiling.duration, 'number')
+  t.is(typeof profiling.phases.compile, 'number')
+  t.is(typeof profiling.phases.spawn, 'number')
+  t.is(typeof profiling.phases.run, 'number')
+  t.is(typeof profiling.phases.total, 'number')
 })

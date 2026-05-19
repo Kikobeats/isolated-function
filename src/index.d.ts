@@ -1,11 +1,24 @@
 /**
  * Profiling information about the isolated function execution
  */
+export interface Phases {
+  /** Time waiting for compilation in milliseconds (0 if cached) */
+  compile: number
+  /** Process creation + Node.js boot + template setup in milliseconds */
+  spawn: number
+  /** User function execution time in milliseconds */
+  run: number
+  /** End-to-end wall-clock time in milliseconds */
+  total: number
+}
+
 export interface Profiling {
+  /** CPU time (user + system) in milliseconds */
+  cpu: number
   /** Memory usage in bytes */
   memory: number
-  /** Execution duration in milliseconds */
-  duration: number
+  /** Execution phase durations in milliseconds */
+  phases: Phases
 }
 
 /**
@@ -66,7 +79,7 @@ export interface CreateOptions {
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {
-  /** Execution timeout in milliseconds */
+  /** Execution timeout in milliseconds. Also enforces a CPU time limit via RLIMIT_CPU. */
   timeout?: number
   /** Memory limit in megabytes */
   memory?: number
