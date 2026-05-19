@@ -67,8 +67,7 @@ module.exports = ({ tmpdir } = {}) => {
         const result = {
           ...rest,
           phases: {
-            install: compiled.install,
-            build: compiled.build,
+            ...compiled.phases,
             spawn: spawnMs - run,
             run,
             total: total()

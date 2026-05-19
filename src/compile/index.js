@@ -27,7 +27,7 @@ const enqueueInstall = (tmpdir, dependencies, allow) => {
 
 module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) => {
   let content = template(snippet)
-  let install = 0
+  const phases = { install: 0 }
 
   const dependencies = detectDependencies(content)
   if (dependencies.length) {
@@ -37,17 +37,17 @@ module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {} } = {}) =
     await duration('npm:install', () => enqueueInstall(tmpdir, dependencies, allow), {
       dependencies
     })
-    install = elapsed()
+    phases.install = elapsed()
   }
 
   const cwd = dependencies.length ? tmpdir : process.cwd()
   const elapsed = timeSpan()
   const result = await duration('esbuild', () => build({ content, cwd }))
-  const buildMs = elapsed()
+  phases.build = elapsed()
   debug('esbuild:output', { content: result.outputFiles[0].text.length })
   content = result.outputFiles[0].text
 
-  return { content, install, build: buildMs }
+  return { content, phases }
 }
 
 module.exports.DEFAULT_TMPDIR = DEFAULT_TMPDIR
