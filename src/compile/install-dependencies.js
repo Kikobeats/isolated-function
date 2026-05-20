@@ -56,3 +56,6 @@ module.exports = async ({ dependencies, cwd, allow = {} }) => {
   validateDependencies(dependencies, allow.dependencies)
   return $(`${install} ${dependencies.join(' ')}`, { cwd, env: { ...process.env, CI: true } })
 }
+
+module.exports.validateDependencies = validateDependencies
+module.exports.extractPackageName = extractPackageName

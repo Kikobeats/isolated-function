@@ -73,6 +73,8 @@ export interface AllowOptions {
 export interface CreateOptions {
   /** Directory for installing code dependencies. Reused across invocations. */
   tmpdir?: string
+  /** Additional directories for resolving dependencies. Dependencies found here with a matching version skip npm install. */
+  nodePaths?: string[]
 }
 
 /**
