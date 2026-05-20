@@ -17,6 +17,8 @@ export interface Profiling {
   cpu: number
   /** Memory usage in bytes */
   memory: number
+  /** Bundled code size in bytes */
+  size: number
   /** Execution phase durations in milliseconds */
   phases: Phases
 }
