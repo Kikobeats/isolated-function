@@ -77,6 +77,7 @@ module.exports = ({ tmpdir, nodePaths } = {}) => {
           }
         }
         debug('node', {
+          size: compiled.content.length,
           cpu: Math.round(result.cpu),
           memory: result.memory,
           ...roundMs(Object.entries(result.phases))
