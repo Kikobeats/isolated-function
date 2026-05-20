@@ -22,6 +22,7 @@
   - [Minimal privilege execution](#minimal-privilege-execution)
   - [Granting specific permissions](#granting-specific-permissions)
   - [Auto install dependencies](#auto-install-dependencies)
+  - [Pre-resolved dependencies](#pre-resolved-dependencies)
   - [Restricting allowed dependencies](#restricting-allowed-dependencies)
   - [Execution profiling](#execution-profiling)
   - [Resource limits](#resource-limits)
@@ -31,6 +32,7 @@
   - [isolatedFunction(\[options\])](#isolatedfunctionoptions)
     - [options](#options)
       - [tmpdir](#tmpdir)
+      - [nodePaths](#nodepaths)
   - [=\> instance(code, \[options\])](#-instancecode-options)
     - [code](#code)
     - [options](#options-1)
@@ -135,6 +137,28 @@ The dependencies, along with the hosted code, are bundled by [esbuild](https://e
 
 Dependencies are installed into a shared persistent directory and reused across invocations, so only the first call that requires a given package pays the install cost.
 
+## Pre-resolved dependencies
+
+Use `nodePaths` to provide directories where dependencies are already installed. Dependencies found there with a matching version skip npm install entirely, avoiding the install cost:
+
+```js
+const path = require('path')
+
+const isolatedFunction = require('isolated-function')({
+  nodePaths: [path.resolve(__dirname, 'node_modules')]
+})
+
+const fn = isolatedFunction(input => {
+  const puppeteer = require('@cloudflare/puppeteer')
+  return puppeteer.name
+})
+
+const { value, profiling } = await fn()
+console.log(profiling.phases.install) // => 0
+```
+
+When a dependency is unversioned (e.g., `require('foo')`), any version found in `nodePaths` is used. When a specific version is requested (e.g., `require('foo@1.0.0')`), the installed version must match exactly; otherwise the dependency is installed via npm as usual.
+
 ## Restricting allowed dependencies
 
 When running untrusted code, you should restrict which npm packages can be installed to prevent supply chain attacks:
@@ -195,11 +219,13 @@ console.log(profiling)
 // {
 //   cpu: 42.5,
 //   memory: 128204800,
+//   size: 1024,
 //   phases: {
-//     compile: 0,
+//     install: 0,
+//     build: 12,
 //     spawn: 48,
 //     run: 54,
-//     total: 102
+//     total: 114
 //   }
 // }
 ```
@@ -208,8 +234,10 @@ Each execution includes profiling data:
 
 - **cpu** — CPU time (user + system) consumed by the process, in milliseconds.
 - **memory** — Peak RSS (Resident Set Size) of the process, in bytes.
+- **size** — Bundled code size in bytes.
 - **phases** — Wall-clock time breakdown of each execution stage, in milliseconds:
-  - **compile** — Time waiting for code compilation (dependency detection, npm install, esbuild bundling). This is `0` after the first call since the result is cached.
+  - **install** — Time spent installing npm dependencies. This is `0` when dependencies are pre-resolved via `nodePaths` or when no external dependencies are used.
+  - **build** — Time spent bundling code with esbuild.
   - **spawn** — Process creation, Node.js boot, and template setup overhead.
   - **run** — User function execution time.
   - **total** — End-to-end wall-clock time.
@@ -336,6 +364,21 @@ const isolatedFunction = require('isolated-function')({
   tmpdir: '/tmp/my-isolated-deps'
 })
 ```
+
+#### nodePaths
+
+Type: `string[]`<br>
+Default: `[]`
+
+Additional directories for resolving dependencies. Dependencies found here with a matching version skip npm install, making execution faster for known dependencies.
+
+```js
+const isolatedFunction = require('isolated-function')({
+  nodePaths: [path.resolve(__dirname, 'node_modules')]
+})
+```
+
+This is useful when you want to pre-bundle frequently used dependencies as part of your package, avoiding the install cost on every invocation. Validation (`allow.dependencies` and invalid-name checks) still runs for all dependencies regardless of whether they are resolved from `nodePaths`.
 
 ## => instance(code, [options])
 

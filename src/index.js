@@ -69,6 +69,7 @@ module.exports = ({ tmpdir, nodePaths } = {}) => {
         const { run, ...rest } = profiling
         const result = {
           ...rest,
+          size: Buffer.byteLength(compiled.content),
           phases: {
             ...compiled.phases,
             spawn: spawnMs - run,
@@ -77,10 +78,9 @@ module.exports = ({ tmpdir, nodePaths } = {}) => {
           }
         }
         debug('node', {
-          size: compiled.content.length,
+          ...result,
           cpu: Math.round(result.cpu),
-          memory: result.memory,
-          ...roundMs(Object.entries(result.phases))
+          phases: roundMs(Object.entries(result.phases))
         })
 
         return isFulfilled
