@@ -12,7 +12,7 @@ const MINIFY = (() => {
       }
 })()
 
-module.exports = ({ content, cwd }) =>
+module.exports = ({ content, cwd, nodePaths = [] }) =>
   esbuild.build({
     stdin: {
       contents: content,
@@ -24,5 +24,6 @@ module.exports = ({ content, cwd }) =>
     platform: 'node',
     legalComments: 'eof',
     target: 'node24',
+    nodePaths,
     ...MINIFY
   })

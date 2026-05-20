@@ -40,11 +40,11 @@ const spawn = ({ args, env, timeout }) => {
   return $('node', ['-', args], spawnOpts)
 }
 
-module.exports = ({ tmpdir } = {}) => {
+module.exports = ({ tmpdir, nodePaths } = {}) => {
   const isolatedFunction = (snippet, { timeout, memory, throwError = true, allow = {} } = {}) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     const { permissions = [] } = allow
-    const compilePromise = compile(snippet, { tmpdir, allow })
+    const compilePromise = compile(snippet, { tmpdir, allow, nodePaths })
 
     return async (...args) => {
       let total
