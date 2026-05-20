@@ -20,6 +20,9 @@ const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permission'
 
+const roundMs = entries =>
+  Object.fromEntries(entries.map(([key, value]) => [key, Math.round(value)]))
+
 const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (memory) flags.push(`--max-old-space-size=${memory}`)
@@ -73,7 +76,11 @@ module.exports = ({ tmpdir } = {}) => {
             total: total()
           }
         }
-        debug('node', { cpu: result.cpu, memory: result.memory, ...result.phases })
+        debug('node', {
+          cpu: Math.round(result.cpu),
+          memory: result.memory,
+          ...roundMs(Object.entries(result.phases))
+        })
 
         return isFulfilled
           ? { isFulfilled, value, profiling: result, logging }
