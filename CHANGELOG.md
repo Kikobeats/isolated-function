@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.61 (2026-05-20)
+
+
+### Bug Fixes
+
+* size report ([#65](https://github.com/Kikobeats/isolated-function/issues/65)) ([6f83550](https://github.com/Kikobeats/isolated-function/commit/6f8355027cb83fff13457746af223244d23d81fe))
+
 ### 0.1.60 (2026-05-20)
 
 ### 0.1.59 (2026-05-20)
