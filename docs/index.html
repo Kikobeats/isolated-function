@@ -6,36 +6,120 @@
   <meta http-equiv="x-ua-compatible" content="ie=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <meta name="description" content="Run untrusted JavaScript with strict memory, timeout, CPU, permission, and dependency controls in a Node.js v8 sandbox." />
+  <meta name="description" content="Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict permissions, dependency allowlists, and resource limits." />
+  <meta name="keywords" content="isolated-function, Node.js sandbox, untrusted JavaScript, v8 sandbox, secure code execution, package dependency allowlist" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="image" content="https://kikobeats.github.io/isolated-function/static/logo.png" />
   <meta name="theme-color" content="#f2f0ea" />
   <link rel="canonical" href="https://kikobeats.github.io/isolated-function/" />
+  <link rel="alternate" type="text/markdown" href="https://kikobeats.github.io/isolated-function/README.md" title="isolated-function documentation markdown" />
+  <link rel="author" href="https://kikobeats.com" />
 
-  <title>isolated-function — Run untrusted code in a Node.js sandbox</title>
+  <title>isolated-function: Node.js Sandbox for Untrusted Code</title>
 
-  <meta property="og:title" content="isolated-function" />
-  <meta property="og:description" content="Run untrusted JavaScript with strict memory, timeout, CPU, permission, and dependency controls in a Node.js v8 sandbox." />
+  <meta property="og:title" content="isolated-function: Node.js Sandbox for Untrusted Code" />
+  <meta property="og:description" content="Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict permissions, dependency allowlists, and resource limits." />
   <meta property="og:image" content="https://kikobeats.github.io/isolated-function/static/logo.png" />
+  <meta property="og:image:alt" content="isolated-function package logo" />
   <meta property="og:url" content="https://kikobeats.github.io/isolated-function/" />
   <meta property="og:site_name" content="isolated-function" />
   <meta property="og:type" content="website" />
+  <meta property="og:locale" content="en_US" />
 
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="isolated-function" />
-  <meta name="twitter:description" content="Run untrusted JavaScript with strict memory, timeout, CPU, permission, and dependency controls in a Node.js v8 sandbox." />
+  <meta name="twitter:site" content="@Kikobeats" />
+  <meta name="twitter:creator" content="@Kikobeats" />
+  <meta name="twitter:title" content="isolated-function: Node.js Sandbox for Untrusted Code" />
+  <meta name="twitter:description" content="Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict permissions, dependency allowlists, and resource limits." />
   <meta name="twitter:image" content="https://kikobeats.github.io/isolated-function/static/logo.png" />
+  <meta name="twitter:image:alt" content="isolated-function package logo" />
 
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "isolated-function",
-    "applicationCategory": "DeveloperApplication",
-    "operatingSystem": "Node.js",
-    "url": "https://kikobeats.github.io/isolated-function/",
-    "downloadUrl": "https://www.npmjs.com/package/isolated-function",
-    "codeRepository": "https://github.com/Kikobeats/isolated-function",
-    "description": "Run untrusted JavaScript with strict memory, timeout, CPU, permission, and dependency controls in a Node.js v8 sandbox."
+    "@graph": [
+      {
+        "@type": "Person",
+        "@id": "https://kikobeats.com/#person",
+        "name": "Kiko Beats",
+        "url": "https://kikobeats.com",
+        "sameAs": [
+          "https://github.com/Kikobeats",
+          "https://x.com/Kikobeats"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://kikobeats.github.io/isolated-function/#website",
+        "name": "isolated-function",
+        "url": "https://kikobeats.github.io/isolated-function/",
+        "description": "Documentation for isolated-function, a Node.js package for running untrusted JavaScript in a constrained v8 sandbox.",
+        "publisher": {
+          "@id": "https://kikobeats.com/#person"
+        },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://kikobeats.github.io/isolated-function/#webpage",
+        "url": "https://kikobeats.github.io/isolated-function/",
+        "name": "isolated-function: Node.js Sandbox for Untrusted Code",
+        "description": "Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict permissions, dependency allowlists, and resource limits.",
+        "isPartOf": {
+          "@id": "https://kikobeats.github.io/isolated-function/#website"
+        },
+        "about": {
+          "@id": "https://kikobeats.github.io/isolated-function/#software"
+        },
+        "primaryImageOfPage": {
+          "@id": "https://kikobeats.github.io/isolated-function/#logo"
+        },
+        "inLanguage": "en"
+      },
+      {
+        "@type": "ImageObject",
+        "@id": "https://kikobeats.github.io/isolated-function/#logo",
+        "url": "https://kikobeats.github.io/isolated-function/static/logo.png",
+        "contentUrl": "https://kikobeats.github.io/isolated-function/static/logo.png",
+        "caption": "isolated-function package logo"
+      },
+      {
+        "@type": ["SoftwareApplication", "SoftwareSourceCode"],
+        "@id": "https://kikobeats.github.io/isolated-function/#software",
+        "name": "isolated-function",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Node.js",
+        "url": "https://kikobeats.github.io/isolated-function/",
+        "sameAs": [
+          "https://github.com/Kikobeats/isolated-function",
+          "https://www.npmjs.com/package/isolated-function"
+        ],
+        "downloadUrl": "https://www.npmjs.com/package/isolated-function",
+        "installUrl": "https://www.npmjs.com/package/isolated-function",
+        "codeRepository": "https://github.com/Kikobeats/isolated-function",
+        "programmingLanguage": "JavaScript",
+        "runtimePlatform": "Node.js >= 24",
+        "license": "https://github.com/Kikobeats/isolated-function/blob/master/LICENSE.md",
+        "author": {
+          "@id": "https://kikobeats.com/#person"
+        },
+        "description": "Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict permissions, dependency allowlists, and resource limits.",
+        "featureList": [
+          "Separate process execution for untrusted JavaScript",
+          "Memory, timeout, and CPU limits",
+          "Node.js permission model integration",
+          "Dependency detection, installation, bundling, and allowlisting",
+          "Execution profiling for compile, spawn, run, and total timings"
+        ],
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock",
+          "url": "https://www.npmjs.com/package/isolated-function"
+        }
+      }
+    ]
   }
   </script>
 
@@ -56,14 +140,28 @@
       <path class="octo-body" d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" />
     </svg>
   </a>
+  <main id="seo-content" class="seo-content" aria-label="isolated-function overview">
+    <h1>isolated-function</h1>
+    <h2>What is isolated-function?</h2>
+    <p>isolated-function is a Node.js library for running JavaScript from AI agents, plugins, customer workflows, and automation rules in a separate process with explicit safety limits.</p>
+    <h2>Node.js sandbox for untrusted code</h2>
+    <p>Use it when you need to execute code you did not write without giving it full access to your server.</p>
+    <h2>What security controls does isolated-function provide?</h2>
+    <ul>
+      <li>Minimal privilege execution through the Node.js permission model.</li>
+      <li>Memory, wall-clock timeout, and CPU time limits for each isolated function.</li>
+      <li>Dependency detection, installation, bundling, shared cache, and optional package allowlists.</li>
+      <li>Execution profiling for compile, spawn, run, and total timings.</li>
+    </ul>
+    <p><a href="https://www.npmjs.com/package/isolated-function">Install isolated-function from npm</a> or <a href="https://github.com/Kikobeats/isolated-function">view the source on GitHub</a>.</p>
+  </main>
   <div id="app"></div>
   <noscript>
-    <h1>isolated-function</h1>
-    <p>Run untrusted JavaScript with strict memory, timeout, CPU, permission, and dependency controls in a Node.js v8 sandbox.</p>
+    <p>JavaScript is required for the full interactive documentation.</p>
     <p><a href="https://github.com/Kikobeats/isolated-function">View on GitHub</a></p>
   </noscript>
+  <script src="./static/main.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/docsify/lib/docsify.min.js"></script>
 </body>
-<script src="./static/main.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/docsify/lib/docsify.min.js"></script>
 
 </html>

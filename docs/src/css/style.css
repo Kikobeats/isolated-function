@@ -18,9 +18,10 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
 
-  --sidebar-width: 400px;
+  --sidebar-width: 250px;
   --content-max: 980px;
-  --content-gutter: 22px;
+  --content-gap: 42px;
+  --content-gutter: 50px;
 }
 
 * {
@@ -70,7 +71,7 @@ body {
   width: var(--sidebar-width);
   height: 100vh;
   overflow-y: auto;
-  padding: 18px 12px 20px;
+  padding: 50px 20px 20px 30px;
   background: var(--bg);
   border-right: 1px solid var(--line);
   transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out), visibility 0ms linear;
@@ -345,8 +346,8 @@ section.cover {
 
 .content {
   max-width: var(--content-max);
-  margin: 0 auto;
-  padding: 24px 22px 52px;
+  margin: 0 var(--content-gutter) 0 calc(var(--sidebar-width) + var(--content-gap));
+  padding: 50px 0 52px;
 }
 
 .markdown-section {
@@ -457,6 +458,10 @@ section.cover {
 .markdown-section ol {
   padding-top: 0.5rem;
   padding-left: 20px;
+}
+
+.markdown-section li:not(:last-child) {
+  margin-bottom: 0.5rem;
 }
 
 .markdown-section a {
@@ -619,8 +624,8 @@ section.cover {
 
 @media (min-width: 901px) and (max-width: 1320px) {
   .content {
-    max-width: calc(100vw - var(--sidebar-width) - 64px);
-    margin-left: calc(var(--sidebar-width) + var(--content-gutter));
+    max-width: calc(100vw - var(--sidebar-width) - var(--content-gap) - var(--content-gutter));
+    margin-left: calc(var(--sidebar-width) + var(--content-gap));
     margin-right: var(--content-gutter);
   }
 }

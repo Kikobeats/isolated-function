@@ -2,8 +2,8 @@
 
 ![isolated-function logo](static/logo.png)
 
-# isolated function
+# isolated-function
 
-> A modern solution for running untrusted code in Node.js
+> Run JavaScript you do not fully trust without giving it full access to your server
 
 ![color](#efefef)

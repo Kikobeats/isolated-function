@@ -100,6 +100,9 @@ const enhancePage = () => {
   const content = document.querySelector('.content')
   const sidebar = document.querySelector('.sidebar')
   const appNameLink = document.querySelector('.app-name-link')
+  const seoContent = document.querySelector('#seo-content')
+
+  if (seoContent) seoContent.remove()
 
   if (content) {
     content.id = 'main-content'

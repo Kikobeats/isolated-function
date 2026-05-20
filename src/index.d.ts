@@ -63,7 +63,7 @@ export interface AllowOptions {
    */
   permissions?: string[]
   /**
-   * Whitelist of npm package names allowed to be installed.
+   * Whitelist of package names allowed to be installed.
    * Prevents arbitrary package installation from untrusted code.
    */
   dependencies?: string[]
@@ -75,7 +75,7 @@ export interface AllowOptions {
 export interface CreateOptions {
   /** Directory for installing code dependencies. Reused across invocations. */
   tmpdir?: string
-  /** Additional directories for resolving dependencies. Dependencies found here with a matching version skip npm install. */
+  /** Additional directories for resolving dependencies. Dependencies found here with a matching version skip package install. */
   nodePaths?: string[]
 }
 

@@ -16,43 +16,94 @@
       alt="NPM Status" style="max-width: 100%;"></a>
 </h3>
 
-# Highlights
+# Why isolated-function?
 
-- Run untrusted code in a separate process with [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
-- Automatic dependency detection, installation, and [esbuild](https://esbuild.github.io/) bundling
-- Shared persistent dependency cache across invocations
-- Memory, timeout, and CPU time limits with phased execution profiling
-- Granular permission and dependency whitelisting
+Sometimes your application needs to run JavaScript that did not come from your codebase.
+
+That code might come from an AI agent, a customer-defined workflow, a plugin, a webhook transform, or an automation rule. You want the useful part: let people customize behavior with code. You do not want the dangerous part: letting that code read files, spawn processes, install anything it wants, or run forever.
+
+**isolated-function** gives you a small API for running that code in a separate Node.js process with clear limits:
+
+- give it a function
+- choose what it is allowed to do
+- set memory and timeout limits
+- run it
+- get back the result, logs, errors, and timing data
+
+It is a sandbox for the kind of code you need to execute, but do not fully trust.
+
+# What it does
+
+At a high level, isolated-function wraps a JavaScript function and runs it away from your main process.
+
+It can:
+
+- run untrusted code in a separate process
+- restrict filesystem, network, worker, and child-process access through the [Node.js Permission Model](https://nodejs.org/api/permissions.html#permission-model)
+- stop runaway code with memory, wall-clock, and CPU limits
+- detect dependencies used by the function
+- install and bundle those dependencies with [esbuild](https://esbuild.github.io/)
+- reuse installed dependencies across executions
+- allow only the packages you explicitly trust
+- return profiling data for compile, spawn, run, and total time
 
 # Install
 
 ```bash
-npm install isolated-function --save
+pnpm add isolated-function
 ```
 
-# Quickstart
+# Your first isolated function
 
-**isolated-function** is a modern solution for running untrusted code in Node.js.
+First create an isolated-function instance. You can call it with no options:
 
 ```js
 const isolatedFunction = require('isolated-function')()
+```
 
-/* create an isolated-function, with resources limitation */
+Or pass shared options that apply to every function created from that instance:
+
+```js
+const isolatedFunction = require('isolated-function')({
+  tmpdir: '/tmp/isolated-function-deps',
+  nodePaths: [require('path').resolve(__dirname, 'node_modules')]
+})
+```
+
+- tmpdir controls where isolated-function installs and reuses dependencies.
+- nodePaths points to directories where dependencies may already be installed, so matching packages can skip installation.
+
+Then wrap a normal JavaScript function:
+
+```js
 const sum = isolatedFunction((y, z) => y + z, {
   memory: 128, // in MB
   timeout: 10000 // in milliseconds
 })
+```
 
-/* interact with the isolated-function */
+Now call it like any other async function:
+
+```js
 const { value, profiling } = await sum(3, 2)
 
-/* close all resources on shutdown */
+console.log(value) // 5
+console.log(profiling.total) // total execution time in milliseconds
+```
+
+When your application shuts down, clean up the shared dependency cache:
+
+```js
 await isolatedFunction.teardown()
 ```
 
+That is the basic loop: create a sandboxed function, run it, read the result.
+
 ## Minimal privilege execution
 
-The hosted code runs in a separate process, with minimal privilege, using [Node.js permission model API](https://nodejs.org/api/permissions.html#permission-model).
+By default, hosted code runs with minimal privileges. If it tries to use a restricted capability, isolated-function fails the execution instead of giving the code access.
+
+For example, this function tries to write to `/etc/passwd`:
 
 ```js
 const fn = isolatedFunction(() => {
@@ -64,9 +115,11 @@ await fn()
 // => PermissionError: Access to 'FileSystemWrite' has been restricted.
 ```
 
+The function ran in its own process, and the filesystem write was blocked.
+
 ## Granting specific permissions
 
-You can grant specific permissions to the isolated function using the `allow.permissions` option:
+Some functions need more access. Grant only the permissions that function needs with `allow.permissions`.
 
 ```js
 const fn = isolatedFunction(
@@ -83,11 +136,11 @@ const { value } = await fn()
 console.log(value) // 'hello'
 ```
 
-See [#allow.permissions](#permissions) to know more.
+See [#allow.permissions](#permissions) for the full list.
 
 ## Auto install dependencies
 
-The hosted code is parsed for detecting `require`/`import` calls and install these dependencies:
+Hosted code can bring its own dependencies. isolated-function parses `require` and `import` calls, installs the packages, and bundles the function before running it.
 
 ```js
 const isEmoji = isolatedFunction(input => {
@@ -100,13 +153,13 @@ await isEmoji('🙌') // => true
 await isEmoji('foo') // => false
 ```
 
-The dependencies, along with the hosted code, are bundled by [esbuild](https://esbuild.github.io/) into a single file that will be evaluated at runtime.
+The hosted code and its dependencies are bundled into a single file with [esbuild](https://esbuild.github.io/) before execution.
 
 Dependencies are installed into a shared persistent directory and reused across invocations, so only the first call that requires a given package pays the install cost.
 
 ## Restricting allowed dependencies
 
-When running untrusted code, you should restrict which npm packages can be installed to prevent supply chain attacks:
+If the code is untrusted, do not let it install arbitrary packages. Use `allow.dependencies` to define the packages it may use:
 
 ```js
 const fn = isolatedFunction(
@@ -122,7 +175,7 @@ const fn = isolatedFunction(
 await fn('🙌') // => true
 ```
 
-If the code tries to require a package not in the allowed list, a `DependencyUnallowedError` is thrown **before** any npm install happens:
+If the code tries to require a package not in the allowed list, a `DependencyUnallowedError` is thrown **before** any package install happens:
 
 ```js
 const fn = isolatedFunction(
@@ -139,7 +192,7 @@ await fn()
 // => DependencyUnallowedError: Dependency 'malicious-package' is not in the allowed list
 ```
 
-> **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because npm packages can execute code during installation via `preinstall`/`postinstall` scripts. The `--ignore-scripts` flag is used to mitigate this, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.
+> **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because packages can execute code during installation via `preinstall`/`postinstall` scripts. The `--ignore-scripts` flag is used to mitigate this, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.
 
 ## Execution profiling
 
@@ -178,14 +231,14 @@ Each execution includes profiling data:
 - **cpu** — CPU time (user + system) consumed by the process, in milliseconds.
 - **memory** — Peak RSS (Resident Set Size) of the process, in bytes.
 - **phases** — Wall-clock time breakdown of each execution stage, in milliseconds:
-  - **compile** — Time waiting for code compilation (dependency detection, npm install, esbuild bundling). This is `0` after the first call since the result is cached.
+  - **compile** — Time waiting for code compilation (dependency detection, package install, esbuild bundling). This is `0` after the first call since the result is cached.
   - **spawn** — Process creation, Node.js boot, and template setup overhead.
   - **run** — User function execution time.
   - **total** — End-to-end wall-clock time.
 
 ## Resource limits
 
-You can limit a **isolated-function** by memory:
+You can limit a **isolated-function** with memory:
 
 ```js
 const fn = isolatedFunction(() => {
@@ -217,7 +270,7 @@ await fn(100)
 // =>  TimeoutError: Execution timed out
 ```
 
-The `timeout` option enforces both a wall-clock limit (`SIGKILL`) and a CPU time limit (`RLIMIT_CPU`). A CPU-bound infinite loop will be terminated by the kernel via `SIGXCPU`:
+The timeout option enforces both a wall-clock limit (`SIGKILL`) and a CPU time limit (`RLIMIT_CPU`). A CPU-bound infinite loop will be terminated by the kernel via `SIGXCPU`:
 
 ```js
 const fn = isolatedFunction(() => {
@@ -402,7 +455,7 @@ When empty, the function runs with minimal privileges and will throw an error if
 Type: `string[]`<br>
 Default: `undefined`
 
-A whitelist of npm package names that are allowed to be installed. When provided, only packages in this list can be required/imported by the isolated function.
+A whitelist of package names that are allowed to be installed. When provided, only packages in this list can be required/imported by the isolated function.
 
 This is a critical security feature when running untrusted code, as it prevents arbitrary package installation which could lead to remote code execution via malicious packages.
 

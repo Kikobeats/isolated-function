@@ -1,8 +1,8 @@
 # isolated-function
 
-> Run untrusted code in a Node.js v8 sandbox with strict resource and capability controls.
+> Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict safety limits.
 
-isolated-function is a Node.js library for executing untrusted JavaScript in an isolated process with explicit limits and allowlists.
+isolated-function is a Node.js library for executing code you did not write without giving it full access to your server.
 
 It is designed for:
 
