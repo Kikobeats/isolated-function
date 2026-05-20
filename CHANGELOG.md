@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.58 (2026-05-20)
+
+
+### Features
+
+* node paths ([#64](https://github.com/Kikobeats/isolated-function/issues/64)) ([34dd7b7](https://github.com/Kikobeats/isolated-function/commit/34dd7b74a5aa3b203cb7034455d909e73752aa85))
+
 ### 0.1.57 (2026-05-20)
 
 ### 0.1.56 (2026-05-19)
