@@ -79,6 +79,8 @@ const setupSidebarHighlight = () => {
 
     const id = parseSectionId(link.getAttribute('href'))
     if (id) setActiveLink(links, id)
+
+    if (window.innerWidth <= 900) document.body.classList.remove('close')
   }
 
   window.addEventListener('scroll', requestSync, { passive: true })

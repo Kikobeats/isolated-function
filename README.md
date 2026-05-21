@@ -18,23 +18,28 @@
 
 # Why isolated-function?
 
-Sometimes your application needs to run JavaScript that did not come from your codebase.
+Sometimes your application needs to let users customize a piece of behavior with JavaScript.
 
-That code might come from an AI agent, a customer-defined workflow, a plugin, a webhook transform, or an automation rule. You want the useful part: let people customize behavior with code. You do not want the dangerous part: letting that code read files, spawn processes, install anything it wants, or run forever.
+That code might be a function template for an AI agent, a customer-defined workflow, a plugin, a webhook transform, or an automation rule. You provide the shape of the function and the runtime context; users provide the custom logic. You want the useful part: programmable behavior without turning the rest of your application into the execution environment.
 
-**isolated-function** gives you a small API for running that code in a separate Node.js process with clear limits:
+**isolated-function** gives you a small API for turning user-customizable function templates into controlled executions:
 
-- give it a function
+- give it a function or generated function template
+- pass runtime arguments into it
 - choose what it is allowed to do
 - set memory and timeout limits
 - run it
 - get back the result, logs, errors, and timing data
 
-It is a sandbox for the kind of code you need to execute, but do not fully trust.
+It is useful when your product needs user-defined logic, but you still want a narrow execution contract around what that logic can receive, return, import, and access.
 
 # What it does
 
 At a high level, isolated-function wraps a JavaScript function and runs it away from your main process.
+
+The core use case is giving your product a controlled function template that users can customize. Your application owns the template, runtime arguments, dependencies, permissions, timeout, memory, result shape, logging, and cleanup. Users only customize the part of the function you intentionally expose.
+
+This is the pattern used by [`@browserless/function`](https://github.com/microlinkhq/browserless/tree/master/packages/function): it lets users build functions that can access a Puppeteer `page` and related browser context, then runs those functions through isolated-function.
 
 It can:
 
@@ -47,7 +52,15 @@ It can:
 - allow only the packages you explicitly trust
 - return profiling data for compile, spawn, run, and total time
 
-# Install
+# What it is not
+
+isolated-function is not a virtual machine, microVM, container runtime, or hypervisor-based sandbox.
+
+It isolates JavaScript by running it in a separate Node.js process with Node.js permissions and resource limits. That is useful for many plugin, workflow, webhook, and AI-agent use cases, but it is not the same security boundary as KVM, Firecracker, Kata Containers, gVisor, or another VM-backed isolation layer.
+
+If you need to execute hostile multi-tenant code, use isolated-function behind a stronger runtime boundary such as a locked-down container, gVisor, Kata Containers, Firecracker, or another hypervisor-backed execution environment.
+
+# Installation
 
 ```bash
 pnpm add isolated-function

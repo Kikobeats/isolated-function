@@ -93,7 +93,10 @@ body:not(.sticky) .sidebar {
   background: var(--line);
 }
 
-.sidebar-toggle,
+.sidebar-toggle {
+  display: none;
+}
+
 .badge,
 img[src*='shields.io'],
 .site-header {
@@ -592,23 +595,79 @@ section.cover {
     display: none;
   }
 
-  body:not(.sticky) .sidebar {
-    display: none;
+  body {
+    overflow-x: hidden;
   }
 
-  .sidebar {
-    position: static;
-    width: 100%;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
+  body:not(.sticky) .sidebar {
     opacity: 1;
+    pointer-events: auto;
+    visibility: visible;
     transform: none;
   }
 
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: calc(-1 * (var(--sidebar-width) + 30px));
+    width: var(--sidebar-width);
+    height: 100vh;
+    height: 100dvh;
+    z-index: 3;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+    padding-top: 62px;
+    transition: transform 0.25s ease-out;
+  }
+
+  .sidebar-toggle {
+    cursor: pointer;
+    display: inherit;
+    border: 0;
+    outline: none;
+    padding: 0 10px;
+    left: 6px;
+    transition: opacity 0.3s;
+    z-index: 4;
+    position: fixed;
+    top: 0;
+    height: 62px;
+    width: 100%;
+    background: var(--bg);
+  }
+
+  .sidebar-toggle:focus-visible {
+    outline: 2px solid var(--active);
+    outline-offset: 2px;
+  }
+
+  .sidebar-toggle span {
+    background-color: var(--text);
+    display: block;
+    margin-bottom: 5px;
+    width: 24px;
+    height: 3px;
+  }
+
+  body.sidebar-toggle {
+    display: none;
+  }
+
+  body.close .sidebar,
+  body.close .content {
+    transform: translateX(calc(var(--sidebar-width) + 30px));
+  }
+
+  body.close .sidebar-toggle {
+    background: var(--bg);
+    transition: background-color 0.3s;
+    width: calc(var(--sidebar-width) + 34px);
+  }
+
   .content {
-    margin-left: 0;
-    padding: 20px 12px 40px;
+    margin: 0;
+    padding: 62px 12px 40px;
+    transition: transform 0.25s ease;
   }
 
   .markdown-section h1,
