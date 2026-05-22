@@ -1,7 +1,7 @@
 {
   "name": "isolated-function",
   "description": "Run JavaScript from AI agents, plugins, and workflows in a separate Node.js process with strict safety limits.",
-  "homepage": "https://kikobeats.github.io/isolated-function/",
+  "homepage": "https://isolated-function.js.org/",
   "version": "0.1.63",
   "types": "src/index.d.ts",
   "main": "src/index.js",
