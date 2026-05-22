@@ -34,13 +34,14 @@ module.exports = async (snippet, { tmpdir = DEFAULT_TMPDIR, allow = {}, nodePath
     ? allDependencies.filter(dep => {
       const name = installDependencies.extractPackageName(dep)
       const version = dep.slice(name.length + 1)
-      try {
-        const pkgPath = require.resolve(path.join(name, 'package.json'), { paths: nodePaths })
-        if (version === 'latest') return false
-        return JSON.parse(readFileSync(pkgPath, 'utf8')).version !== version
-      } catch {
-        return true
+      for (const np of nodePaths) {
+        try {
+          const pkg = JSON.parse(readFileSync(path.join(np, name, 'package.json'), 'utf8'))
+          if (version === 'latest') return false
+          return pkg.version !== version
+        } catch {}
       }
+      return true
     })
     : allDependencies
 
