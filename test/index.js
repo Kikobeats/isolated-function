@@ -71,6 +71,41 @@ test('resolve require dependencies', async t => {
   t.is(await run(fn('foo')), false)
 })
 
+test('install dependencies not directly in nodePaths', async t => {
+  const path = require('path')
+  const { mkdirSync, writeFileSync, rmSync } = require('fs')
+
+  // Simulate production: a nodePaths dir deep in node_modules
+  // with a dependency (cheerio) only in a *parent* node_modules
+  const testDir = path.join(require('os').tmpdir(), `isolated-fn-nodepaths-${Date.now()}`)
+  const nodePathDir = path.join(testDir, 'deep', 'nested', 'node_modules')
+  mkdirSync(nodePathDir, { recursive: true })
+
+  // Place a fake package in a parent directory's node_modules.
+  // require.resolve({ paths }) would find it via traversal,
+  // but esbuild's nodePaths does not traverse parents.
+  const parentPkgDir = path.join(testDir, 'node_modules', 'is-standard-emoji')
+  mkdirSync(parentPkgDir, { recursive: true })
+  writeFileSync(
+    path.join(parentPkgDir, 'package.json'),
+    '{"name":"is-standard-emoji","version":"1.0.0"}'
+  )
+  writeFileSync(path.join(parentPkgDir, 'index.js'), 'module.exports = () => false')
+
+  const instance = require('..')({ nodePaths: [nodePathDir] })
+  const fn = instance(emoji => {
+    const isEmoji = require('is-standard-emoji@1.0.0')
+    return isEmoji(emoji)
+  })
+
+  // If the bug is present, the dep would be skipped (found via parent traversal)
+  // and esbuild would use the fake parent version returning false.
+  // With the fix, the dep is installed fresh into tmpdir and works correctly.
+  t.is(await run(fn('🙌')), true)
+
+  rmSync(testDir, { recursive: true, force: true })
+})
+
 test('runs async code', async t => {
   const fn = isolatedFunction(async duration => {
     const delay = ms => new Promise(resolve => setTimeout(resolve, ms))
