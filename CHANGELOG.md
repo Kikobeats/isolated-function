@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.1.63 (2026-05-22)
+
+
+### Bug Fixes
+
+* **compile:** check nodePaths directly instead of require.resolve ([#66](https://github.com/Kikobeats/isolated-function/issues/66)) ([9e16358](https://github.com/Kikobeats/isolated-function/commit/9e16358631414ca095f3a47b509e89ee4c693513))
+
 ### 0.1.62 (2026-05-20)
 
 ### 0.1.61 (2026-05-20)
