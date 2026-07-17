@@ -229,7 +229,12 @@ const { value, profiling } = await fn()
 console.log(profiling)
 // {
 //   cpu: 42.5,
-//   memory: 128204800,
+//   memory: {
+//     total: 128204800,
+//     used: 85198848,
+//     heap: 2831776,
+//     external: 83961856
+//   },
 //   phases: {
 //     compile: 0,
 //     spawn: 48,
@@ -242,7 +247,11 @@ console.log(profiling)
 Each execution includes profiling data:
 
 - **cpu** — CPU time (user + system) consumed by the process, in milliseconds.
-- **memory** — Peak RSS (Resident Set Size) of the process, in bytes.
+- **memory** — Memory breakdown, in bytes, sampled when the function returns. No single number describes the memory a function used, so each field answers a different question:
+  - **total** — Resident set size of the whole isolate process. Includes the ~43MB Node.js runtime baseline, so it is never zero.
+  - **used** — `total` minus the baseline measured before the function ran. This is the part attributable to the function.
+  - **heap** — V8 heap in use. This is the only field bounded by the [`memory`](#memory) limit.
+  - **external** — Off-heap memory (`Buffer`, `ArrayBuffer`, typed arrays). **Not** bounded by the [`memory`](#memory) limit, and invisible to `total` until the pages are written to.
 - **phases** — Wall-clock time breakdown of each execution stage, in milliseconds:
   - **compile** — Time waiting for code compilation (dependency detection, package install, esbuild bundling). This is `0` after the first call since the result is cached.
   - **spawn** — Process creation, Node.js boot, and template setup overhead.
@@ -256,19 +265,15 @@ You can limit a **isolated-function** with memory:
 ```js
 const fn = isolatedFunction(() => {
   const storage = []
-  const oneMegabyte = 1024 * 1024
-  while (storage.length < 78) {
-    const array = new Uint8Array(oneMegabyte)
-    for (let ii = 0; ii < oneMegabyte; ii += 4096) {
-      array[ii] = 1
-    }
-    storage.push(array)
-  }
+  while (true) storage.push('x'.repeat(1024))
 }, { memory: 64 })
 
 await fn()
 // =>  MemoryError: Out of memory
 ```
+
+> [!IMPORTANT]
+> The `memory` limit bounds the **V8 heap** (`profiling.memory.heap`), which is where ordinary objects and strings live. It does **not** bound off-heap memory (`profiling.memory.external`): `Buffer`, `ArrayBuffer`, and typed arrays are allocated outside the heap and can grow past the limit without raising `MemoryError`. If a function must be held to a total memory budget, enforce it outside the process (for example a cgroup) rather than relying on `memory` alone.
 
 or by execution time:
 

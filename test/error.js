@@ -111,6 +111,34 @@ test('handle OOM', async t => {
   t.is(typeof error.profiling.phases.total, 'number')
 })
 
+/* `memory: 1` is the only limit small enough that V8 traps instead of aborting.
+   Every production-sized limit exhausts the heap through the normal OOM path,
+   which exits with SIGABRT. Growing the heap (not off-heap buffers) is what the
+   limit actually bounds, so this is the shape of a real customer OOM. */
+test('handle OOM at a production-sized limit', async t => {
+  const fn = isolatedFunction(
+    () => {
+      const storage = []
+      while (true) storage.push('x'.repeat(1024))
+    },
+    { memory: 16 }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.is(error.name, 'MemoryError')
+  t.is(error.message, 'Out of memory')
+  t.is(typeof error.profiling.phases.total, 'number')
+})
+
+test('an abort that is not OOM is not reported as MemoryError', async t => {
+  const fn = isolatedFunction(() => process.abort(), { memory: 16 })
+
+  const error = await t.throwsAsync(fn())
+
+  t.not(error.name, 'MemoryError')
+})
+
 test('handle filesystem permissions', async t => {
   {
     const fn = isolatedFunction(() => {
