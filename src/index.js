@@ -16,6 +16,12 @@ const createError = ({ name, message, ...props }) => {
   return error
 }
 
+/* V8 aborts (SIGABRT) on heap exhaustion for any realistic --max-old-space-size,
+   and only traps (SIGTRAP) when the limit is too small to boot the heap. Gate the
+   abort on V8's message so an unrelated abort is not reported as a memory error. */
+const isOutOfMemory = ({ signalCode, stderr }) =>
+  signalCode === 'SIGTRAP' || (signalCode === 'SIGABRT' && /out of memory/i.test(stderr ?? ''))
+
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permission'
@@ -94,7 +100,7 @@ module.exports = ({ tmpdir, nodePaths } = {}) => {
         debug.error(serializeError(error))
         const profiling = { phases: { total: total() } }
 
-        if (error.signalCode === 'SIGTRAP') {
+        if (isOutOfMemory(error)) {
           throw createError({
             name: 'MemoryError',
             message: 'Out of memory',
