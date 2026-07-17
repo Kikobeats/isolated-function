@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## 0.2.0 (2026-07-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* profiling.memory is an object instead of a number.
+Callers reading it as a number should read profiling.memory.used
+for the memory attributable to the function, or .total for the
+previous RSS value.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CTJQQb6p1UWdkireDjCVri
+
+* Report memory as a breakdown, and fix OOM detection (#70) ([fda9eb9](https://github.com/Kikobeats/isolated-function/commit/fda9eb928e9bf8bc498cf1c59e8d58bb593e384a)), closes [#70](https://github.com/Kikobeats/isolated-function/issues/70)
+
 ### 0.1.66 (2026-06-19)
 
 ### 0.1.65 (2026-06-12)
