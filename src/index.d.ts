@@ -12,11 +12,22 @@ export interface Phases {
   total: number
 }
 
+export interface Memory {
+  /** Resident set size of the whole isolate process, in bytes */
+  total: number
+  /** Resident memory attributable to the function (total minus the pre-execution baseline), in bytes */
+  used: number
+  /** V8 heap in use, in bytes. This is the only figure bounded by the `memory` limit */
+  heap: number
+  /** Off-heap memory (Buffer, ArrayBuffer, TypedArray), in bytes. Not bounded by the `memory` limit */
+  external: number
+}
+
 export interface Profiling {
   /** CPU time (user + system) in milliseconds */
   cpu: number
-  /** Memory usage in bytes */
-  memory: number
+  /** Memory usage breakdown, in bytes */
+  memory: Memory
   /** Bundled code size in bytes */
   size: number
   /** Execution phase durations in milliseconds */

@@ -4,6 +4,7 @@ import createIsolatedFunction, {
   FailureResult,
   SuccessResult,
   Profiling,
+  Memory,
   Logging,
   IsolatedFunctionOptions,
   IsolatedFunctionInstance,
@@ -99,7 +100,11 @@ if (execResult.isFulfilled) {
   const { profiling, logging } = execResult
 
   expectType<number>(profiling.cpu)
-  expectType<number>(profiling.memory)
+  expectType<Memory>(profiling.memory)
+  expectType<number>(profiling.memory.total)
+  expectType<number>(profiling.memory.used)
+  expectType<number>(profiling.memory.heap)
+  expectType<number>(profiling.memory.external)
   expectType<number>(profiling.phases.compile)
   expectType<number>(profiling.phases.spawn)
   expectType<number>(profiling.phases.run)

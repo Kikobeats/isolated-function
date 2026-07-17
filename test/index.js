@@ -156,7 +156,18 @@ test('memory profiling', async t => {
 
   t.is(value, undefined)
   t.is(typeof profiling.cpu, 'number')
-  t.is(typeof profiling.memory, 'number')
+  t.is(typeof profiling.memory.total, 'number')
+  t.is(typeof profiling.memory.used, 'number')
+  t.is(typeof profiling.memory.heap, 'number')
+  t.is(typeof profiling.memory.external, 'number')
+
+  // the 78MB of touched Uint8Array is off-heap, so it lands in external and
+  // shows up as memory the function is accountable for, not as heap
+  t.true(profiling.memory.external > 64 * 1024 * 1024)
+  t.true(profiling.memory.used > 64 * 1024 * 1024)
+  t.true(profiling.memory.total >= profiling.memory.used)
+  t.true(profiling.memory.heap < profiling.memory.external)
+
   t.is(typeof profiling.phases.install, 'number')
   t.is(typeof profiling.phases.build, 'number')
   t.is(typeof profiling.phases.spawn, 'number')

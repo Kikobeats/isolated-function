@@ -4,7 +4,9 @@ const SERIALIZE_ERROR = require('./serialize-error')
 
 module.exports = snippet => `;(send => {
   process.stdout.write = function () {}
-  const respond = (isFulfilled, value, run, logs = {}) => { const {user, system} = process.cpuUsage(); send(JSON.stringify({isFulfilled, logging: logs, value, profiling: {cpu: (user + system) / 1000, memory: process.memoryUsage().rss, run}})) }
+  const baseline = process.memoryUsage().rss
+  const memory = () => { const m = process.memoryUsage(); return {total: m.rss, used: Math.max(0, m.rss - baseline), heap: m.heapUsed, external: m.external} }
+  const respond = (isFulfilled, value, run, logs = {}) => { const {user, system} = process.cpuUsage(); send(JSON.stringify({isFulfilled, logging: logs, value, profiling: {cpu: (user + system) / 1000, memory: memory(), run}})) }
 
   return Promise.resolve().then(async () => {
     const args = JSON.parse(process.argv[2])
