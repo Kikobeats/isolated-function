@@ -28,11 +28,18 @@
     "url": "https://github.com/Kikobeats/isolated-function/issues"
   },
   "keywords": [
-    "isolated",
-    "javascript",
-    "js",
+    "agent",
+    "ai",
+    "eval",
+    "isolate",
+    "plugin",
+    "process",
     "sandbox",
-    "v8"
+    "security",
+    "v8",
+    "vm",
+    "worker",
+    "workflow"
   ],
   "dependencies": {
     "@kikobeats/time-span": "~1.0.5",
