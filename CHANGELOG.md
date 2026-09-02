@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.4 (2026-09-02)
+
+
+### Bug Fixes
+
+* stop inheriting process.env in the child ([#76](https://github.com/Kikobeats/isolated-function/issues/76)) ([6a992a3](https://github.com/Kikobeats/isolated-function/commit/6a992a3ec03b7aadcf4119d139fe3d0c1e234ce4))
+
 ### 0.2.3 (2026-08-03)
 
 ### 0.2.2 (2026-07-30)
