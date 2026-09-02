@@ -62,7 +62,7 @@ module.exports = ({ tmpdir, nodePaths } = {}) => {
         const subprocess = spawn({
           args: JSON.stringify(args),
           env: {
-            ...process.env,
+            PATH: process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout

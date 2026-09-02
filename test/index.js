@@ -50,6 +50,16 @@ test('capture logs', async t => {
   })
 })
 
+test('does not inherit parent process.env', async t => {
+  process.env.ISOLATED_FUNCTION_TEST_SECRET = 'should-not-leak'
+  t.teardown(() => {
+    delete process.env.ISOLATED_FUNCTION_TEST_SECRET
+  })
+
+  const fn = isolatedFunction(() => process.env.ISOLATED_FUNCTION_TEST_SECRET)
+  t.is(await run(fn()), undefined)
+})
+
 test('prevent to write to process.stdout', async t => {
   const fn = isolatedFunction(() => {
     process.stdout.write('disturbing')
