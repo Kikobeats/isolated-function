@@ -130,6 +130,8 @@ await fn()
 
 The function ran in its own process, and the filesystem write was blocked.
 
+The child does not inherit the parent environment. Only `PATH` and the sandbox `NODE_OPTIONS` are passed. Values the function needs should be arguments, not env vars.
+
 ## Granting specific permissions
 
 Some functions need more access. Grant only the permissions that function needs with `allow.permissions`.
