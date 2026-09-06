@@ -5,7 +5,6 @@ module.exports = `(() => {
 const commonProperties = [
   { property: 'name', enumerable: false },
   { property: 'message', enumerable: false },
-  { property: 'stack', enumerable: false },
   { property: 'code', enumerable: true }
 ]
 
