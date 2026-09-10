@@ -374,6 +374,21 @@ const isolatedFunction = require('isolated-function')({
 })
 ```
 
+#### esbuild
+
+Type: `object`
+
+Extra [esbuild](https://esbuild.github.io/api/#build) options merged into the compile step. Also accepted per call.
+
+```js
+const isolatedFunction = require('isolated-function')({
+  esbuild: {
+    external: ['fsevents'],
+    define: { 'process.env.FOO': '"bar"' }
+  }
+})
+```
+
 ## => instance(code, [options])
 
 ### code

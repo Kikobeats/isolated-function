@@ -46,11 +46,19 @@ const spawn = ({ args, env, timeout }) => {
   return $('node', ['-', args], spawnOpts)
 }
 
-module.exports = ({ tmpdir, nodePaths } = {}) => {
-  const isolatedFunction = (snippet, { timeout, memory, throwError = true, allow = {} } = {}) => {
+module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
+  const isolatedFunction = (
+    snippet,
+    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild } = {}
+  ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     const { permissions = [] } = allow
-    const compilePromise = compile(snippet, { tmpdir, allow, nodePaths })
+    const compilePromise = compile(snippet, {
+      tmpdir,
+      allow,
+      nodePaths,
+      esbuild: callEsbuild ?? esbuild
+    })
 
     return async (...args) => {
       let total
