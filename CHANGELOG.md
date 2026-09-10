@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.5 (2026-09-10)
+
+
+### Features
+
+* accept extra esbuild compile options ([#78](https://github.com/Kikobeats/isolated-function/issues/78)) ([7f2df9b](https://github.com/Kikobeats/isolated-function/commit/7f2df9bd1a57f3bd555da37de7aa455ff0bed022))
+
 ### 0.2.4 (2026-09-02)
 
 
