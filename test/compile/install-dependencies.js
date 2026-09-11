@@ -1,8 +1,13 @@
 'use strict'
 
+const { mkdtempSync, readFileSync, rmSync } = require('fs')
+const { execSync } = require('child_process')
+const { tmpdir } = require('os')
+const { join } = require('path')
 const test = require('ava')
 
 const { DependencyNameError, DependencyUnallowedError } = require('../../src/errors')
+const installDependencies = require('../../src/compile/install-dependencies')
 const isolatedFunction = require('../..')()
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
@@ -116,6 +121,22 @@ test('allow.dependencies › blocks invalid package names with spaces', async t 
   t.true(error instanceof DependencyNameError)
   t.is(error.dependency, 'lodash@latest express')
   t.true(error.message.includes('not a valid npm package name'))
+})
+
+test('pnpm install resolves @latest past minimumReleaseAge', async t => {
+  t.timeout(30_000)
+  t.true(installDependencies.install.includes('--config.minimum-release-age=0'))
+
+  const cwd = mkdtempSync(join(tmpdir(), 'isolated-fn-age-'))
+  t.teardown(() => rmSync(cwd, { recursive: true, force: true }))
+
+  await installDependencies({ dependencies: ['xml-urls@latest'], cwd })
+
+  const { version } = JSON.parse(
+    readFileSync(join(cwd, 'node_modules/xml-urls/package.json'), 'utf8')
+  )
+  const latest = execSync('npm view xml-urls version', { encoding: 'utf8' }).trim()
+  t.is(version, latest)
 })
 
 test('allow.dependencies › blocks invalid package names even without allow list', async t => {
