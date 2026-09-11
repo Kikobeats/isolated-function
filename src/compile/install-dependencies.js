@@ -10,7 +10,7 @@ const install = (() => {
     execSync('which pnpm', { stdio: ['pipe', 'pipe', 'ignore'] })
       .toString()
       .trim()
-    return 'pnpm install --no-lockfile --ignore-workspace-root-check --ignore-scripts --engine-strict=false'
+    return 'pnpm install --no-lockfile --ignore-workspace-root-check --ignore-scripts --engine-strict=false --config.minimum-release-age=0'
   } catch {
     return 'npm install --no-package-lock --ignore-scripts --silent'
   }
@@ -57,5 +57,6 @@ module.exports = async ({ dependencies, cwd, allow = {} }) => {
   return $(`${install} ${dependencies.join(' ')}`, { cwd, env: { ...process.env, CI: true } })
 }
 
+module.exports.install = install
 module.exports.validateDependencies = validateDependencies
 module.exports.extractPackageName = extractPackageName
