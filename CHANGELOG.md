@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.6 (2026-09-11)
+
+
+### Bug Fixes
+
+* install [@latest](https://github.com/latest) past pnpm minimumReleaseAge ([#79](https://github.com/Kikobeats/isolated-function/issues/79)) ([eb60d41](https://github.com/Kikobeats/isolated-function/commit/eb60d41f1512f074cc0c77bcd0cb8160d7d9fdfb))
+
 ### 0.2.5 (2026-09-10)
 
 
