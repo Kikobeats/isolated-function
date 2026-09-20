@@ -9,7 +9,7 @@ module.exports = snippet => `;(send => {
   const respond = (isFulfilled, value, run, logs = {}) => { const {user, system} = process.cpuUsage(); send(JSON.stringify({isFulfilled, logging: logs, value, profiling: {cpu: (user + system) / 1000, memory: memory(), run}})) }
 
   return Promise.resolve().then(async () => {
-    const args = JSON.parse(process.argv[2])
+    const args = JSON.parse(globalThis.__isolated_args)
 
     /* https://github.com/Kikobeats/null-prototype-object */
     const logging = new (/* @__PURE__ */ (() => { let e = function(){}; return e.prototype = Object.create(null), Object.freeze(e.prototype), e })());

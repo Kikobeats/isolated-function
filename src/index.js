@@ -37,13 +37,13 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
-const spawn = ({ args, env, timeout }) => {
+const spawn = ({ env, timeout }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (Number.isFinite(timeout)) {
     const seconds = Math.ceil(timeout / 1000)
-    return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-', args], spawnOpts)
+    return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-'], spawnOpts)
   }
-  return $('node', ['-', args], spawnOpts)
+  return $('node', ['-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
@@ -65,18 +65,18 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
+        const prelude = `globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
-          args: JSON.stringify(args),
           env: {
             PATH: process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout
         })
-        subprocess.stdin.on('error', () => {})
-        Readable.from(compiled.content).pipe(subprocess.stdin)
+        subprocess.stdin?.on('error', () => {})
+        Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess
         const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
