@@ -65,6 +65,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
+        const prelude = `globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
@@ -77,10 +78,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         subprocess.stdin?.on('error', () => {})
         // Linux MAX_ARG_STRLEN is 128KiB per argv; put args on stdin with the
         // bundled script so large payloads do not fail spawn with E2BIG.
-        Readable.from([
-          `globalThis.__isolated_args=${JSON.stringify(args)};`,
-          compiled.content
-        ]).pipe(subprocess.stdin)
+        // Double-stringify so the isolate JSON.parse's and __proto__ stays
+        // an own property, matching process.argv.
+        Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess
         const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
