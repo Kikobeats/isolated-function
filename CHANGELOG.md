@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.7 (2026-09-20)
+
+
+### Bug Fixes
+
+* pass function arguments on stdin ([#80](https://github.com/Kikobeats/isolated-function/issues/80)) ([041462e](https://github.com/Kikobeats/isolated-function/commit/041462e755c7938f2ae61dcff1fe7b7da4ad3f24))
+
 ### 0.2.6 (2026-09-11)
 
 
