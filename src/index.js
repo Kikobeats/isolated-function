@@ -76,10 +76,6 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           timeout
         })
         subprocess.stdin?.on('error', () => {})
-        // Linux MAX_ARG_STRLEN is 128KiB per argv; put args on stdin with the
-        // bundled script so large payloads do not fail spawn with E2BIG.
-        // Double-stringify so the isolate JSON.parse's and __proto__ stays
-        // an own property, matching process.argv.
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess
         const spawnMs = spawnElapsed()
