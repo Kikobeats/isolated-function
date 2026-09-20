@@ -126,6 +126,12 @@ test('runs async code', async t => {
   t.is(await run(fn(200)), 'done')
 })
 
+test('accepts arguments larger than Linux MAX_ARG_STRLEN', async t => {
+  const payload = 'x'.repeat(200 * 1024)
+  const fn = isolatedFunction(value => value.length)
+  t.is(await run(fn(payload)), 200 * 1024)
+})
+
 test('escape arguments', async t => {
   const fn = isolatedFunction((...args) => args.length)
 
