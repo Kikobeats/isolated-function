@@ -238,7 +238,8 @@ console.log(profiling)
 //     external: 83961856
 //   },
 //   phases: {
-//     compile: 0,
+//     install: 0,
+//     build: 12,
 //     spawn: 48,
 //     run: 54,
 //     total: 102
@@ -255,7 +256,8 @@ Each execution includes profiling data:
   - **heap** — V8 heap in use. This is the only field bounded by the [`memory`](#memory) limit.
   - **external** — Off-heap memory (`Buffer`, `ArrayBuffer`, typed arrays). **Not** bounded by the [`memory`](#memory) limit, and invisible to `total` until the pages are written to.
 - **phases** — Wall-clock time breakdown of each execution stage, in milliseconds:
-  - **compile** — Time waiting for code compilation (dependency detection, package install, esbuild bundling). This is `0` after the first call since the result is cached.
+  - **install** — Time installing npm dependencies the code requires. `0` when it requires none, or they are already present.
+  - **build** — Time bundling the code with esbuild. Each `instance(code)` call builds again; with [`slot`](#slot), it is only the time to fill an already built shell.
   - **spawn** — Process creation, Node.js boot, and template setup overhead.
   - **run** — User function execution time.
   - **total** — End-to-end wall-clock time.
@@ -394,6 +396,13 @@ const isolatedFunction = require('isolated-function')({
 })
 ```
 
+#### shellCacheBytes
+
+Type: `number`<br>
+Default: `33554432` (32 MB)
+
+Byte budget for the shells built for [`slot`](#slot). The least recently used shell is evicted first; a shell larger than the whole budget is not kept.
+
 ## => instance(code, [options])
 
 ### code
@@ -418,6 +427,36 @@ Type: `boolean`<br>
 Default: `true`
 
 When `false`, returns the error instead of throwing it as `{ value: error, isFulfilled: false }`.
+
+#### slot
+
+Type: `string`
+
+Code to place where `code` contains the `SLOT` placeholder. Use it when you wrap many different pieces of code in the same surrounding program: the program is bundled once and cached, and each call only fills the slot, so it skips esbuild entirely.
+
+```js
+const isolatedFunction = require('isolated-function')()
+const { SLOT } = isolatedFunction
+
+const program = `async (input) => {
+  const transform = ${SLOT}
+  return transform(input)
+}`
+
+await isolatedFunction(program, { slot: 'x => x * 2' })(21) // => 42
+await isolatedFunction(program, { slot: 'x => x + 1' })(21) // => 22, no rebuild
+```
+
+`code` must be a string containing `SLOT` exactly once, and the slot code must be an expression (typically a function).
+
+Slot code is evaluated at global scope, like top-level CommonJS code: it sees globals, `require`, `module`, `exports`, `__filename` and `__dirname`, and `this` is `exports`, but **not** variables declared in the surrounding program. Pass whatever it needs as arguments, as in the example above. This also means nothing esbuild does to the program (renaming or removing its variables) can change what the slot code sees.
+
+Some slot code needs esbuild to see it, so it falls back to a full build of the filled program, with the same result as not using `slot`:
+
+- it requires an npm package (it must be installed and bundled), loads one dynamically with `import()`, uses `import.meta`, or calls `require` with a computed specifier. Builtins such as `require('path')` stay on the cached path.
+- it mentions a key of `esbuild.define`, which only applies to code present at build time.
+
+A syntax error in the slot code rejects with a `SyntaxError`, as a full build does. The first call pays the build of the program (reported in `profiling.phases`, including any `install`); later calls only fill the slot.
 
 #### timeout
 
