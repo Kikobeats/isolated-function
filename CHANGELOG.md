@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.8 (2026-09-21)
+
+
+### Features
+
+* add slot to skip rebuilding a shared program ([#81](https://github.com/Kikobeats/isolated-function/issues/81)) ([85588e6](https://github.com/Kikobeats/isolated-function/commit/85588e67cfe75b7475a2c37d6137f8b4dce99ec3))
+
 ### 0.2.7 (2026-09-20)
 
 
