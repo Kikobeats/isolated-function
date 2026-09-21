@@ -273,13 +273,24 @@ test('slot code resolves CommonJS names, this and sloppy mode like a full build'
   const isolatedFunction = createIsolatedFunction()
   const code = `() => ({
     names: [typeof require, typeof module, typeof exports, typeof __filename, typeof __dirname],
-    arrowThis: typeof this,
+    arrowThis: this === exports && this === module.exports,
     sloppy: (function () { return this !== undefined })()
   })`
   const full = await run(isolatedFunction, fillSource(SHELL, code), {})
   const cached = await run(isolatedFunction, SHELL, { slot: code })
   t.deepEqual(cached.value, full.value)
   t.deepEqual(cached.value.names, ['function', 'object', 'object', 'string', 'string'])
+  t.true(cached.value.arrowThis)
+})
+
+test('import.meta falls back to a full build', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const { value, isFulfilled } = await run(isolatedFunction, SHELL, {
+    slot: '() => typeof import.meta'
+  })
+  t.true(isFulfilled)
+  t.is(value, 'object')
+  t.is(isolatedFunction.shells.size, 0)
 })
 
 test('a dynamic import falls back to a full build', async t => {

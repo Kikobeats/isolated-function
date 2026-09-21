@@ -35,10 +35,11 @@ const parse = code => acorn.parse(asExpression(code), { ecmaVersion: 2023, sourc
 
 /**
  * Whether slot code needs esbuild to see it, so a cached shell cannot serve
- * it: it requires a package or loads one dynamically (both must be installed
- * and bundled), or it mentions an `esbuild.define` key (which only applies to
- * code present at build time). Parsing also rejects invalid code with the same
- * SyntaxError a full build would raise.
+ * it: it requires a package, loads one dynamically, or uses `import.meta`
+ * (`new Function` rejects that, and esbuild rewrites it), or it mentions an
+ * `esbuild.define` key (which only applies to code present at build time).
+ * Parsing also rejects invalid code with the same SyntaxError a full build
+ * would raise.
  */
 const needsFullBuild = (code, esbuild) => {
   let needed = false
@@ -46,6 +47,9 @@ const needsFullBuild = (code, esbuild) => {
   walk.simple(parse(code), {
     ImportExpression () {
       needed = true
+    },
+    MetaProperty (node) {
+      if (node.meta.name === 'import' && node.property.name === 'meta') needed = true
     },
     CallExpression (node) {
       if (node.callee.type !== 'Identifier' || node.callee.name !== 'require') return
@@ -177,17 +181,18 @@ const fillSource = (snippet, code) => snippet.replace(SLOT, () => asExpression(c
 /**
  * Places slot code in an already built shell. The code is not spliced in as
  * source: it becomes a string literal compiled at run time at global scope,
- * with the CommonJS module scope passed in and the enclosing `this`, so it
- * resolves names exactly like top-level CommonJS code. Nothing esbuild did to
- * the shell (renaming, tree shaking, hoisting a dependency's top-level
- * binding over a global) can change what the slot code sees, and nothing in
- * it can collide with the shell's own bindings.
+ * with the CommonJS module scope passed in. `this` is `exports`: that is what
+ * esbuild rewrites top-level `this` to, and the runtime `this` where SLOT sits
+ * is the module wrapper's this (globalThis when the isolate reads stdin).
+ * Nothing esbuild did to the shell (renaming, tree shaking, hoisting a
+ * dependency's top-level binding over a global) can change what the slot code
+ * sees, and nothing in it can collide with the shell's own bindings.
  */
 const fillShell = (content, code) => {
   const body = JSON.stringify(`return ${asExpression(code)}`)
   const compiled = `(new Function(${COMMONJS_SCOPE.map(name => `'${name}'`).join(
     ', '
-  )}, ${body}).call(this, ${COMMONJS_SCOPE.join(', ')}))`
+  )}, ${body}).call(exports, ${COMMONJS_SCOPE.join(', ')}))`
   return content.replace(SLOT, () => compiled)
 }
 

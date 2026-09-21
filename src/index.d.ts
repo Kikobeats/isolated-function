@@ -109,8 +109,9 @@ export interface IsolatedFunctionOptions {
   /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
    * and cached, and each call only fills the slot, so calls that differ only in
-   * this code skip bundling. Code that requires npm packages falls back to a
-   * full build. The snippet must be a string containing `SLOT` exactly once.
+   * this code skip bundling. Code that requires npm packages or uses
+   * `import.meta` falls back to a full build. The snippet must be a string
+   * containing `SLOT` exactly once.
    */
   slot?: string
 }
