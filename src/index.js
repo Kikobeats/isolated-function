@@ -6,6 +6,7 @@ const { Readable } = require('node:stream')
 const { rm } = require('fs/promises')
 const $ = require('tinyspawn')
 
+const { SLOT, UNSPLICEABLE, createShells, keyOf, fill } = require('./compile/shells')
 const compile = require('./compile')
 const { debug } = require('./debug')
 
@@ -46,19 +47,46 @@ const spawn = ({ env, timeout }) => {
   return $('node', ['-'], spawnOpts)
 }
 
-module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
+module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
+  const shells = createShells({ maxBytes: shellCacheBytes })
+
+  /**
+   * Builds `snippet` once with SLOT still in it, then fills the slot per call.
+   * Anything that would make the cached build wrong for this call falls back
+   * to a normal build of the filled snippet: code that needs npm dependencies
+   * (they must be installed and bundled), options that cannot be keyed, or a
+   * build in which SLOT did not survive exactly once.
+   */
+  const compileSlot = async (snippet, slot, compileOpts) => {
+    const elapsed = timeSpan()
+    const filled = () => compile(fill(snippet, slot), compileOpts)
+
+    if (compile.detectDependencies(`(${slot})`).length > 0) return filled()
+
+    const key = keyOf(snippet, compileOpts)
+    if (key === undefined) return filled()
+
+    const shell = await shells.get(key, () => compile(snippet, compileOpts))
+    if (shell === UNSPLICEABLE) return filled()
+
+    return { content: fill(shell, slot), phases: { install: 0, build: elapsed() } }
+  }
+
   const isolatedFunction = (
     snippet,
-    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild } = {}
+    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
+    if (slot !== undefined) {
+      if (typeof slot !== 'string') throw new TypeError('Expected `slot` to be a string')
+      if (typeof snippet !== 'string' || snippet.split(SLOT).length !== 2) {
+        throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
+      }
+    }
     const { permissions = [] } = allow
-    const compilePromise = compile(snippet, {
-      tmpdir,
-      allow,
-      nodePaths,
-      esbuild: callEsbuild ?? esbuild
-    })
+    const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild }
+    const compilePromise =
+      slot === undefined ? compile(snippet, compileOpts) : compileSlot(snippet, slot, compileOpts)
 
     return async (...args) => {
       let total
@@ -152,10 +180,16 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
   }
 
   isolatedFunction.teardown = async () => {
+    shells.clear()
     const { DEFAULT_TMPDIR } = compile
     const dir = tmpdir || DEFAULT_TMPDIR
     await rm(dir, { recursive: true, force: true })
   }
 
+  isolatedFunction.SLOT = SLOT
+  isolatedFunction.shells = shells
+
   return isolatedFunction
 }
+
+module.exports.SLOT = SLOT

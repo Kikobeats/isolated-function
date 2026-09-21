@@ -2,8 +2,10 @@
  * Profiling information about the isolated function execution
  */
 export interface Phases {
-  /** Time waiting for compilation in milliseconds (0 if cached) */
-  compile: number
+  /** Time installing npm dependencies in milliseconds (0 when none were needed) */
+  install: number
+  /** Time bundling in milliseconds. With `slot`, the time to fill a cached shell */
+  build: number
   /** Process creation + Node.js boot + template setup in milliseconds */
   spawn: number
   /** User function execution time in milliseconds */
@@ -88,6 +90,8 @@ export interface CreateOptions {
   tmpdir?: string
   /** Additional directories for resolving dependencies. Dependencies found here with a matching version skip package install. */
   nodePaths?: string[]
+  /** Byte budget for cached `slot` shells, least recently used evicted first. Defaults to 32 MB. */
+  shellCacheBytes?: number
 }
 
 /**
@@ -102,6 +106,13 @@ export interface IsolatedFunctionOptions {
   throwError?: boolean
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
+  /**
+   * Code to place where the snippet contains `SLOT`. The snippet is built once
+   * and cached, and each call only fills the slot, so calls that differ only in
+   * this code skip bundling. Code that requires npm packages falls back to a
+   * full build. The snippet must be a string containing `SLOT` exactly once.
+   */
+  slot?: string
 }
 
 /**
@@ -111,10 +122,22 @@ export type IsolatedFn<T = unknown> = (
   ...args: unknown[]
 ) => Promise<SuccessResult<T> | FailureResult>
 
+export interface ShellCache {
+  /** Number of cached shells, including builds in flight */
+  readonly size: number
+  /** Bytes held by cached shells */
+  readonly bytes: number
+  clear(): void
+}
+
 export interface IsolatedFunctionInstance {
   <T = unknown>(snippet: Function | string, options?: IsolatedFunctionOptions): IsolatedFn<T>
-  /** Removes the shared dependencies directory */
+  /** Removes the shared dependencies directory and clears the shell cache */
   teardown(): Promise<void>
+  /** Placeholder identifier for the `slot` option */
+  readonly SLOT: string
+  /** Cache of built `slot` shells */
+  readonly shells: ShellCache
 }
 
 /**
@@ -134,5 +157,10 @@ export interface IsolatedFunctionInstance {
  * ```
  */
 declare function createIsolatedFunction(options?: CreateOptions): IsolatedFunctionInstance
+
+declare namespace createIsolatedFunction {
+  /** Placeholder identifier for the `slot` option */
+  const SLOT: string
+}
 
 export default createIsolatedFunction

@@ -105,7 +105,8 @@ if (execResult.isFulfilled) {
   expectType<number>(profiling.memory.used)
   expectType<number>(profiling.memory.heap)
   expectType<number>(profiling.memory.external)
-  expectType<number>(profiling.phases.compile)
+  expectType<number>(profiling.phases.install)
+  expectType<number>(profiling.phases.build)
   expectType<number>(profiling.phases.spawn)
   expectType<number>(profiling.phases.run)
   expectType<number>(profiling.phases.total)
@@ -154,3 +155,13 @@ if (variadicResult.isFulfilled) {
 const teardownResult = await isolatedFunction.teardown()
 
 expectType<void>(teardownResult)
+
+/* slot */
+
+const slotted = isolatedFunction(`async (x) => (${isolatedFunction.SLOT})(x)`, {
+  slot: 'x => x * 2'
+})
+expectType<IsolatedFn<unknown>>(slotted)
+expectType<string>(createIsolatedFunction.SLOT)
+expectType<number>(isolatedFunction.shells.bytes)
+createIsolatedFunction({ shellCacheBytes: 16 * 1024 * 1024 })
