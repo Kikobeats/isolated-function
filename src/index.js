@@ -6,7 +6,15 @@ const { Readable } = require('node:stream')
 const { rm } = require('fs/promises')
 const $ = require('tinyspawn')
 
-const { SLOT, UNSPLICEABLE, createShells, keyOf, fill } = require('./compile/shells')
+const {
+  SLOT,
+  UNSPLICEABLE,
+  createShells,
+  keyOf,
+  needsFullBuild,
+  fillSource,
+  fillShell
+} = require('./compile/shells')
 const compile = require('./compile')
 const { debug } = require('./debug')
 
@@ -53,23 +61,27 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
   /**
    * Builds `snippet` once with SLOT still in it, then fills the slot per call.
    * Anything that would make the cached build wrong for this call falls back
-   * to a normal build of the filled snippet: code that needs npm dependencies
-   * (they must be installed and bundled), options that cannot be keyed, or a
-   * build in which SLOT did not survive exactly once.
+   * to a normal build of the filled snippet: slot code esbuild has to see
+   * (see `needsFullBuild`), options that cannot be keyed, or a build in which
+   * SLOT did not survive exactly once.
    */
   const compileSlot = async (snippet, slot, compileOpts) => {
     const elapsed = timeSpan()
-    const filled = () => compile(fill(snippet, slot), compileOpts)
+    const full = () => compile(fillSource(snippet, slot), compileOpts)
 
-    if (compile.detectDependencies(`(${slot})`).length > 0) return filled()
+    if (needsFullBuild(slot, compileOpts.esbuild)) return full()
 
     const key = keyOf(snippet, compileOpts)
-    if (key === undefined) return filled()
+    if (key === undefined) return full()
 
     const shell = await shells.get(key, () => compile(snippet, compileOpts))
-    if (shell === UNSPLICEABLE) return filled()
+    if (shell === UNSPLICEABLE) return full()
 
-    return { content: fill(shell, slot), phases: { install: 0, build: elapsed() } }
+    const install = shell.compiled?.phases.install ?? 0
+    return {
+      content: fillShell(shell.content, slot),
+      phases: { install, build: elapsed() - install }
+    }
   }
 
   const isolatedFunction = (

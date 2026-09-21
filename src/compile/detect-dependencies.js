@@ -88,3 +88,4 @@ module.exports = code => {
 }
 
 module.exports.parseDependency = parseDependency
+module.exports.isBuiltinModule = isBuiltinModule

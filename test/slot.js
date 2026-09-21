@@ -5,7 +5,7 @@ const path = require('path')
 const os = require('os')
 
 const createIsolatedFunction = require('..')
-const { createShells, keyOf, fill, UNSPLICEABLE } = require('../src/compile/shells')
+const { createShells, keyOf, fillSource, UNSPLICEABLE } = require('../src/compile/shells')
 
 const { SLOT } = createIsolatedFunction
 
@@ -27,7 +27,7 @@ test('a filled slot returns the same value as building the code inline', async t
   const isolatedFunction = createIsolatedFunction()
   const code = 'x => x * 2'
 
-  const inline = await run(isolatedFunction, fill(SHELL, code), {}, 21)
+  const inline = await run(isolatedFunction, fillSource(SHELL, code), {}, 21)
   const slotted = await run(isolatedFunction, SHELL, { slot: code }, 21)
 
   t.true(slotted.isFulfilled)
@@ -135,11 +135,34 @@ test('teardown clears the shell cache', async t => {
   t.is(isolatedFunction.shells.size, 0)
 })
 
-test('shells: a build without exactly one SLOT is marked unspliceable and holds no bytes', async t => {
+test('shells: a build without exactly one SLOT is remembered as unspliceable and counted', async t => {
   const shells = createShells()
   const value = await shells.get('twice', async () => ({ content: `${SLOT}${SLOT}` }))
   t.is(value, UNSPLICEABLE)
-  t.is(shells.bytes, 0)
+  t.is(await shells.get('twice', async () => t.fail('should not rebuild')), UNSPLICEABLE)
+  t.true(
+    shells.bytes > 0,
+    'unspliceable verdicts count against the budget, so they are evicted too'
+  )
+})
+
+test('shells: many distinct unspliceable snippets stay within the byte budget', async t => {
+  const shells = createShells({ maxBytes: 4096 })
+  for (let i = 0; i < 50; i++) {
+    await shells.get(`twice-${i}`, async () => ({ content: `${SLOT}${SLOT}` }))
+  }
+  t.true(shells.bytes <= 4096)
+  t.true(shells.size < 50)
+})
+
+test('shells: only the call that built the shell receives the build result', async t => {
+  const shells = createShells()
+  const build = async () => ({ content: SLOT, phases: { install: 7, build: 3 } })
+  const first = await shells.get('k', build)
+  const second = await shells.get('k', build)
+  t.deepEqual(first.compiled.phases, { install: 7, build: 3 })
+  t.is(second.compiled, undefined)
+  t.is(second.content, SLOT)
 })
 
 test('shells: the least recently used shell is evicted to stay within the byte budget', async t => {
@@ -177,7 +200,7 @@ test('shells: a failed build is not cached, so the next call retries', async t =
     })
   )
   t.is(shells.size, 0)
-  t.is(await shells.get('k', async () => ({ content: SLOT })), SLOT)
+  t.is((await shells.get('k', async () => ({ content: SLOT }))).content, SLOT)
 })
 
 test('keyOf: same inputs give the same key regardless of option key order', t => {
@@ -208,4 +231,105 @@ test('keyOf: same inputs give the same key regardless of option key order', t =>
       esbuild: { define: { a: '1' }, target: 'node24' }
     })
   )
+})
+
+test('a trailing line comment in the slot code does not swallow the closing parenthesis', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const { value, isFulfilled } = await run(
+    isolatedFunction,
+    SHELL,
+    { slot: 'x => x * 2 // double it' },
+    21
+  )
+  t.true(isFulfilled)
+  t.is(value, 42)
+  t.is(isolatedFunction.shells.size, 1)
+})
+
+test('slot code does not see bindings of the surrounding program', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const program = `async () => {
+    const secret = 'shell'
+    return (${SLOT})()
+  }`
+  const { value } = await run(isolatedFunction, program, { slot: '() => typeof secret' })
+  t.is(value, 'undefined')
+})
+
+test('a binding in the program cannot shadow a global the slot code uses', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const program = `async () => {
+    const URL = 'shadowed'
+    return (${SLOT})()
+  }`
+  const { value } = await run(isolatedFunction, program, {
+    slot: '() => typeof URL === "function" && URL === globalThis.URL'
+  })
+  t.true(value)
+  t.is(isolatedFunction.shells.size, 1)
+})
+
+test('slot code resolves CommonJS names, this and sloppy mode like a full build', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const code = `() => ({
+    names: [typeof require, typeof module, typeof exports, typeof __filename, typeof __dirname],
+    arrowThis: typeof this,
+    sloppy: (function () { return this !== undefined })()
+  })`
+  const full = await run(isolatedFunction, fillSource(SHELL, code), {})
+  const cached = await run(isolatedFunction, SHELL, { slot: code })
+  t.deepEqual(cached.value, full.value)
+  t.deepEqual(cached.value.names, ['function', 'object', 'object', 'string', 'string'])
+})
+
+test('a dynamic import falls back to a full build', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const { value } = await run(isolatedFunction, SHELL, {
+    slot: "async () => (await import('path')).posix.join('a', 'b')"
+  })
+  t.is(value, 'a/b')
+  t.is(isolatedFunction.shells.size, 0)
+})
+
+test('a require with a computed specifier falls back to a full build', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const { value } = await run(isolatedFunction, SHELL, {
+    slot: "() => { const id = 'pa' + 'th'; return require(id).posix.join('a', 'b') }"
+  })
+  t.is(value, 'a/b')
+  t.is(isolatedFunction.shells.size, 0)
+})
+
+test('slot code mentioning an esbuild define key falls back so the define applies', async t => {
+  const isolatedFunction = createIsolatedFunction()
+  const esbuild = { define: { 'process.env.SLOT_TEST': '"defined"' } }
+
+  const mentions = await run(isolatedFunction, SHELL, {
+    slot: '() => process.env.SLOT_TEST',
+    esbuild
+  })
+  t.is(mentions.value, 'defined')
+  t.is(isolatedFunction.shells.size, 0)
+
+  const unrelated = await run(isolatedFunction, SHELL, { slot: '() => 1', esbuild })
+  t.is(unrelated.value, 1)
+  t.is(isolatedFunction.shells.size, 1)
+})
+
+test('the call that builds a shell reports its install time', async t => {
+  const isolatedFunction = createIsolatedFunction({ tmpdir: ownTmpdir('install') })
+  t.teardown(() => isolatedFunction.teardown())
+  const program = `async (x) => {
+    const isNumber = require('is-number@7.0.0')
+    return isNumber((${SLOT})(x))
+  }`
+
+  const first = await run(isolatedFunction, program, { slot: 'x => x' }, 5)
+  const second = await run(isolatedFunction, program, { slot: 'x => x + 1' }, 5)
+
+  t.true(first.value)
+  t.true(second.value)
+  t.true(first.profiling.phases.install > 0, 'the building call installed is-number')
+  t.is(second.profiling.phases.install, 0)
+  t.is(isolatedFunction.shells.size, 1)
 })

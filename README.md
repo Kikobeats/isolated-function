@@ -447,7 +447,16 @@ await isolatedFunction(program, { slot: 'x => x * 2' })(21) // => 42
 await isolatedFunction(program, { slot: 'x => x + 1' })(21) // => 22, no rebuild
 ```
 
-`code` must be a string containing `SLOT` exactly once. The result is identical to building the filled code directly. Slot code that requires npm packages falls back to a full build, since those packages must be installed and bundled; Node.js builtins such as `require('path')` stay on the cached path. A syntax error in the slot code still rejects with a `SyntaxError`.
+`code` must be a string containing `SLOT` exactly once, and the slot code must be an expression (typically a function).
+
+Slot code is evaluated at global scope, like top-level CommonJS code: it sees globals, `require`, `module`, `exports`, `__filename` and `__dirname`, and the same `this`, but **not** variables declared in the surrounding program. Pass whatever it needs as arguments, as in the example above. This also means nothing esbuild does to the program (renaming or removing its variables) can change what the slot code sees.
+
+Some slot code needs esbuild to see it, so it falls back to a full build of the filled program, with the same result as not using `slot`:
+
+- it requires an npm package (it must be installed and bundled), loads one dynamically with `import()`, or calls `require` with a computed specifier. Builtins such as `require('path')` stay on the cached path.
+- it mentions a key of `esbuild.define`, which only applies to code present at build time.
+
+A syntax error in the slot code rejects with a `SyntaxError`, as a full build does. The first call pays the build of the program (reported in `profiling.phases`, including any `install`); later calls only fill the slot.
 
 #### timeout
 
