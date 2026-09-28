@@ -240,3 +240,37 @@ test('a host resolving with nothing resolves the call with nothing', async t => 
   )
   t.true(value)
 })
+
+test('a circular value fails its call and leaves the host standing', async t => {
+  const circular = {}
+  circular.self = circular
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('loop')
+      } catch (error) {
+        return error.message.split('\n')[0]
+      }
+    },
+    { loop: async () => circular }
+  )
+  t.is(value, 'Converting circular structure to JSON')
+})
+
+test('a host throwing before it returns a promise still answers', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('boom')
+      } catch (error) {
+        return error.message
+      }
+    },
+    {
+      boom: () => {
+        throw new Error('refused before starting')
+      }
+    }
+  )
+  t.is(value, 'refused before starting')
+})
