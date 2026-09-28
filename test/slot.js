@@ -203,6 +203,14 @@ test('shells: a failed build is not cached, so the next call retries', async t =
   t.is((await shells.get('k', async () => ({ content: SLOT }))).content, SLOT)
 })
 
+test('keyOf: host methods change the shell cache key', t => {
+  const bare = keyOf('s', { tmpdir: '/t' })
+  const content = keyOf('s', { tmpdir: '/t', hostMethods: ['content'] })
+  t.not(bare, content)
+  t.not(content, keyOf('s', { tmpdir: '/t', hostMethods: ['other'] }))
+  t.is(content, keyOf('s', { hostMethods: ['content'], tmpdir: '/t' }))
+})
+
 test('keyOf: same inputs give the same key regardless of option key order', t => {
   const a = keyOf('s', {
     tmpdir: '/t',

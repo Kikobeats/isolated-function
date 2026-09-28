@@ -15,6 +15,7 @@ const {
   fillSource,
   fillShell
 } = require('./compile/shells')
+const { attach: attachHost } = require('./host')
 const compile = require('./compile')
 const { debug } = require('./debug')
 
@@ -46,8 +47,9 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
-const spawn = ({ env, timeout }) => {
+const spawn = ({ env, timeout, hasHost }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
+  if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   if (Number.isFinite(timeout)) {
     const seconds = Math.ceil(timeout / 1000)
     return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-'], spawnOpts)
@@ -86,7 +88,16 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
 
   const isolatedFunction = (
     snippet,
-    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot } = {}
+    {
+      timeout,
+      memory,
+      throwError = true,
+      allow = {},
+      esbuild: callEsbuild,
+      slot,
+      host,
+      maxHostCalls
+    } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     if (slot !== undefined) {
@@ -95,8 +106,13 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
         throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
       }
     }
+    if (maxHostCalls !== undefined && (!Number.isInteger(maxHostCalls) || maxHostCalls < 0)) {
+      throw new TypeError('Expected `maxHostCalls` to be a finite non-negative integer')
+    }
     const { permissions = [] } = allow
-    const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild }
+    const hostMethods = host === undefined ? undefined : Object.keys(host)
+    if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
+    const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
     const compilePromise =
       slot === undefined ? compile(snippet, compileOpts) : compileSlot(snippet, slot, compileOpts)
 
@@ -113,8 +129,10 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
             PATH: process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
-          timeout
+          timeout,
+          hasHost: hostMethods !== undefined
         })
+        if (hostMethods !== undefined) attachHost(subprocess, host, { maxCalls: maxHostCalls })
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

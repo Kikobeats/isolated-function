@@ -26,9 +26,9 @@ const enqueueInstall = (tmpdir, dependencies, allow) => {
 
 module.exports = async (
   snippet,
-  { tmpdir = DEFAULT_TMPDIR, allow = {}, nodePaths = [], esbuild } = {}
+  { tmpdir = DEFAULT_TMPDIR, allow = {}, nodePaths = [], esbuild, hostMethods } = {}
 ) => {
-  let content = template(snippet)
+  let content = template(snippet, { hostMethods })
   const phases = { install: 0 }
 
   const allDependencies = detectDependencies(content)

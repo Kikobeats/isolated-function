@@ -95,6 +95,18 @@ export interface CreateOptions {
 }
 
 /**
+ * The call the snippet makes to reach a `host` method, available inside the
+ * isolate as `globalThis.__isolated_host`. It exists only there, so it is
+ * exported as a type rather than declared on the global scope: a declaration
+ * would also typecheck a call from the process that never has it.
+ *
+ * ```ts
+ * const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
+ * ```
+ */
+export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
+
+/**
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {
@@ -106,6 +118,22 @@ export interface IsolatedFunctionOptions {
   throwError?: boolean
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
+  /**
+   * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
+   * Each is resolved when the snippet asks for it and never before, so work the
+   * snippet does not reach costs nothing. The same method and arguments resolve
+   * once per run.
+   *
+   * The isolate runs untrusted code and can write to the channel descriptor
+   * directly, so treat every argument as untrusted input: a message proves that
+   * something in the child asked, never that the snippet asked.
+   */
+  host?: Record<string, (...args: any[]) => unknown>
+  /**
+   * Distinct host calls allowed per run, rejecting the rest. Defaults to 32.
+   * A value that is not a finite non-negative integer throws when the function is created.
+   */
+  maxHostCalls?: number
   /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
    * and cached, and each call only fills the slot, so calls that differ only in

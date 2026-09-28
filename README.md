@@ -430,6 +430,53 @@ Default: `true`
 
 When `false`, returns the error instead of throwing it as `{ value: error, isFulfilled: false }`.
 
+#### host
+
+Type: `object`
+
+Methods the code can call back into the host, reachable inside the isolate as `globalThis.__isolated_host(name, args)`. Each one is resolved when the code asks for it and never before, so work the code never reaches costs nothing.
+
+```js
+const isolatedFunction = require('isolated-function')()
+
+const fn = isolatedFunction(
+  async () => {
+    const html = await globalThis.__isolated_host('content')
+    return html.length
+  },
+  {
+    host: {
+      content: async () => expensiveFetch(url)
+    }
+  }
+)
+
+await fn() //=> { value: 4512, ... }
+```
+
+`expensiveFetch` runs only because the code awaited `content`. A code that returns `42` without asking never triggers it.
+
+In TypeScript the call is typed by the exported `HostCall`, since the global exists only inside the isolate:
+
+```ts
+import { HostCall } from 'isolated-function'
+
+const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
+```
+
+The same method and arguments resolve once per run, so asking twice costs one resolution.
+
+Passing `host` opens an IPC channel to the child. The isolate runs untrusted code and can write to that channel descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message is ignored.
+
+A call the code starts but never awaits does not take the run down, and a value the channel cannot carry, such as a `BigInt`, rejects that call rather than hanging it.
+
+#### maxHostCalls
+
+Type: `number`<br>
+Default: `32`
+
+Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count. Arguments that cannot be serialized are rejected the same way and do not reach the host. A value that is not a finite non-negative integer throws when the function is created.
+
 #### slot
 
 Type: `string`
