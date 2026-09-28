@@ -334,6 +334,20 @@ test('a host call budget of zero reaches nothing', async t => {
   t.deepEqual(calls, [])
 })
 
+test('a host method keeps the host object as its receiver', async t => {
+  const host = {
+    token: 'secret',
+    read () {
+      return this.token
+    }
+  }
+  const { value } = await isolatedFunction(async () => globalThis.__isolated_host('read'), {
+    host,
+    timeout: 20000
+  })()
+  t.is(value, 'secret')
+})
+
 test('a method added after the run starts is refused', async t => {
   const calls = []
   const host = {

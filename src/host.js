@@ -42,12 +42,12 @@ const absorbSendError = () => {}
 const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
   const resolved = new Map()
   /**
-   * Fixed when the run starts. A method added on `host` later is not reachable,
-   * and the function invoked is the one captured here.
+   * Fixed when the run starts. A method added on `host` later is not reachable.
+   * Bound to `host` so a method call still sees that object as `this`.
    */
   const exposed = new Map()
   for (const name of Object.keys(host)) {
-    if (typeof host[name] === 'function') exposed.set(name, host[name])
+    if (typeof host[name] === 'function') exposed.set(name, host[name].bind(host))
   }
 
   /**
