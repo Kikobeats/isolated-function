@@ -456,9 +456,19 @@ await fn() //=> { value: 4512, ... }
 
 `expensiveFetch` runs only because the code awaited `content`. A code that returns `42` without asking never triggers it.
 
+In TypeScript the call is typed by the exported `HostCall`, since the global exists only inside the isolate:
+
+```ts
+import { HostCall } from 'isolated-function'
+
+const host = globalThis.__isolated_host as HostCall
+```
+
 The same method and arguments resolve once per run, so asking twice costs one resolution.
 
 Passing `host` opens an IPC channel to the child. The isolate runs untrusted code and can write to that channel descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message is ignored.
+
+A call the code starts but never awaits does not take the run down, and a value the channel cannot carry, such as a `BigInt`, rejects that call rather than hanging it.
 
 #### maxHostCalls
 

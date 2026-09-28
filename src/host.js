@@ -17,11 +17,38 @@ const isWellFormed = message =>
   typeof message.method === 'string' &&
   (message.args === undefined || Array.isArray(message.args))
 
+/**
+ * A rejection value is whatever the host method threw, which need not be an
+ * Error, and the reason travels as JSON regardless.
+ */
+const describe = value =>
+  value instanceof Error && typeof value.message === 'string' ? value.message : String(value)
+
+/**
+ * A snippet that never awaits its call can finish and close the channel while
+ * the reply is in flight. Without a callback the resulting EPIPE is emitted on
+ * the subprocess, and an `error` there fails the whole run.
+ */
+const absorbSendError = () => {}
+
 const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
   const resolved = new Map()
 
+  /**
+   * A value the channel cannot carry, such as a BigInt, makes `send` throw. The
+   * isolate is waiting on this id and would otherwise wait until its timeout,
+   * so the failure is reported over the same reply.
+   */
   const answer = (child, id, outcome) => {
-    if (child.connected) child.send({ id, ...outcome })
+    if (!child.connected) return
+    try {
+      child.send({ id, ...outcome }, absorbSendError)
+    } catch (error) {
+      if (outcome.failed) return
+      try {
+        child.send({ id, failed: true, reason: describe(error) }, absorbSendError)
+      } catch {}
+    }
   }
 
   const resolve = (method, args) => {
@@ -53,7 +80,7 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
 
     resolve(method, args).then(
       value => answer(child, id, { value }),
-      error => answer(child, id, { failed: true, reason: error.message })
+      error => answer(child, id, { failed: true, reason: describe(error) })
     )
   })
 }

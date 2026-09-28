@@ -5,10 +5,15 @@ const HOST_CALL = 'globalThis.__isolated_host'
 const source = methods => `
     ${HOST_CALL} = (() => {
       const request = process.send.bind(process)
-      const close = process.disconnect.bind(process)
+      const disconnect = process.disconnect.bind(process)
       const pending = new Map()
       let lastId = 0
       let closed = false
+
+      const settle = reason => {
+        for (const waiting of pending.values()) waiting.reject(new Error(reason))
+        pending.clear()
+      }
 
       process.on('message', reply => {
         const waiting = pending.get(reply && reply.id)
@@ -17,20 +22,30 @@ const source = methods => `
         reply.failed ? waiting.reject(new Error(reply.reason)) : waiting.resolve(reply.value)
       })
 
-      const call = (method, args) => new Promise((resolve, reject) => {
-        if (closed) return reject(new Error('the host channel is already closed'))
-        const id = ++lastId
-        pending.set(id, { resolve, reject })
-        request({ id, method, args })
+      process.on('disconnect', () => {
+        closed = true
+        settle('the host channel closed before answering')
       })
+
+      const call = (method, args) => {
+        const answer = new Promise((resolve, reject) => {
+          if (closed) return reject(new Error('the host channel is already closed'))
+          const id = ++lastId
+          pending.set(id, { resolve, reject })
+          request({ id, method, args })
+        })
+        /* A call the snippet starts but never awaits must not take the run down
+           with an unhandled rejection; awaiting it still surfaces the error. */
+        answer.catch(() => {})
+        return answer
+      }
 
       call.methods = ${JSON.stringify(methods)}
       call.close = () => {
         if (closed) return
         closed = true
-        for (const { reject } of pending.values()) reject(new Error('the host channel closed'))
-        pending.clear()
-        close()
+        settle('the host channel closed')
+        disconnect()
       }
       return call
     })()`

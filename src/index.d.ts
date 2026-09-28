@@ -95,6 +95,18 @@ export interface CreateOptions {
 }
 
 /**
+ * The call the snippet makes to reach a `host` method, available inside the
+ * isolate as `globalThis.__isolated_host`. It exists only there, so it is
+ * exported as a type rather than declared on the global scope: a declaration
+ * would also typecheck a call from the process that never has it.
+ *
+ * ```ts
+ * const host = globalThis.__isolated_host as HostCall
+ * ```
+ */
+export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
+
+/**
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {

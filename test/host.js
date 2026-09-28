@@ -5,6 +5,8 @@ const { default: test } = require('ava')
 const { UNKNOWN_METHOD, TOO_MANY_CALLS } = require('../src/host')
 const isolatedFunction = require('..')()
 
+const NOT_AN_ERROR = null
+
 const HOST = {
   content: async () => '<html>fetched by the host</html>',
   metadata: async () => ({ title: 'Hacker News' }),
@@ -174,4 +176,67 @@ test('a host exposing nothing is a mistake worth reporting', t => {
   t.throws(() => isolatedFunction(async () => 1, { host: {} }), {
     message: 'Expected `host` to expose a method'
   })
+})
+
+test('a call the snippet never awaits does not take the run down', async t => {
+  const { value } = await run(async () => {
+    globalThis.__isolated_host('content')
+    return 'returned without awaiting'
+  })
+  t.is(value, 'returned without awaiting')
+})
+
+test('a call abandoned while the host is still working is harmless', async t => {
+  const { value } = await run(
+    async () => {
+      globalThis.__isolated_host('slow')
+      return 'returned without awaiting'
+    },
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('late'), 1000)) }
+  )
+  t.is(value, 'returned without awaiting')
+})
+
+test('a value the channel cannot carry fails the call, not the run', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('big')
+      } catch (error) {
+        return error.message
+      }
+    },
+    { big: async () => 1n }
+  )
+  t.is(value, 'Do not know how to serialize a BigInt')
+})
+
+test('a host rejecting with something other than an Error still answers', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('bad')
+      } catch (error) {
+        return error.message
+      }
+    },
+    {
+      bad: () =>
+        Promise.resolve().then(() => {
+          throw NOT_AN_ERROR
+        })
+    }
+  )
+  t.is(value, 'null')
+})
+
+test('a host resolving with nothing resolves the call with nothing', async t => {
+  const { value } = await run(
+    async () => {
+      const answered = await globalThis.__isolated_host('none')
+      return answered === undefined
+    },
+    { none: async () => undefined }
+  )
+  t.true(value)
 })
