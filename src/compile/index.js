@@ -50,15 +50,15 @@ module.exports = async (
     })
     : allDependencies
 
-  if (dependencies.length) {
+  if (allDependencies.length) {
     content = transformDependencies(content, plan.requireAs)
     mkdirSync(tmpdir, { recursive: true })
+  }
+
+  if (dependencies.length) {
     const elapsed = timeSpan()
     await enqueueInstall(tmpdir, dependencies, allow)
     phases.install = elapsed()
-  } else if (allDependencies.length) {
-    content = transformDependencies(content, plan.requireAs)
-    mkdirSync(tmpdir, { recursive: true })
   }
 
   const cwd = allDependencies.length ? tmpdir : process.cwd()
