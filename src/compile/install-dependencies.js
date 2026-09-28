@@ -36,8 +36,18 @@ const extractPackageName = dependency => {
   return dependency
 }
 
-const aliasName = (name, version) =>
-  `${name}-${version.replace(/[^A-Za-z0-9._-]/g, char => `_${char.codePointAt(0).toString(16)}_`)}`
+const aliasVersion = version =>
+  version.replace(/[^A-Za-z0-9.]/g, char => `_${char.codePointAt(0).toString(16)}_`)
+
+const aliasName = (name, version) => {
+  const versionPart = aliasVersion(version)
+  if (name.startsWith('@')) {
+    const slash = name.indexOf('/')
+    const pkg = name.slice(slash + 1)
+    return `${name.slice(0, slash)}/${pkg.length}-${pkg}-${versionPart}`
+  }
+  return `${name.length}-${name}-${versionPart}`
+}
 
 const planDependencies = dependencies => {
   const groups = new Map()

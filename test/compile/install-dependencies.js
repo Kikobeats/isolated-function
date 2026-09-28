@@ -193,20 +193,29 @@ test('two versions of one package install as npm aliases', t => {
   ])
 
   t.deepEqual(install, [
-    'is-number-5.0.0@npm:is-number@5.0.0',
-    'is-number-6.0.0@npm:is-number@6.0.0'
+    '9-is-number-5.0.0@npm:is-number@5.0.0',
+    '9-is-number-6.0.0@npm:is-number@6.0.0'
   ])
-  t.is(requireAs.get('is-number@5.0.0'), 'is-number-5.0.0')
-  t.is(requireAs.get('is-number@6.0.0'), 'is-number-6.0.0')
+  t.is(requireAs.get('is-number@5.0.0'), '9-is-number-5.0.0')
+  t.is(requireAs.get('is-number@6.0.0'), '9-is-number-6.0.0')
 })
 
 test('caret and tilde ranges get different alias names', t => {
   const { install } = installDependencies.planDependencies(['is-number@^6.0.0', 'is-number@~6.0.0'])
 
   t.deepEqual(install, [
-    'is-number-_5e_6.0.0@npm:is-number@^6.0.0',
-    'is-number-_7e_6.0.0@npm:is-number@~6.0.0'
+    '9-is-number-_5e_6.0.0@npm:is-number@^6.0.0',
+    '9-is-number-_7e_6.0.0@npm:is-number@~6.0.0'
   ])
+})
+
+test('a package name does not collide with a longer name plus a shorter version', t => {
+  const ranged = installDependencies.planDependencies(['foo@1.0.0-2.0.0', 'foo@2.0.0'])
+  const prefixed = installDependencies.planDependencies(['foo-1.0.0@2.0.0', 'foo-1.0.0@3.0.0'])
+  const rangedAlias = ranged.install.find(spec => spec.includes('1.0.0-2.0.0')).split('@npm:')[0]
+  const prefixedAlias = prefixed.install.find(spec => spec.endsWith('@2.0.0')).split('@npm:')[0]
+
+  t.not(rangedAlias, prefixedAlias)
 })
 
 test('a versionless require mixed with two versions is rejected', async t => {
@@ -260,8 +269,8 @@ test('runs code requiring two versions of one package', async t => {
   })
 
   t.is(await run(fn()), true)
-  t.is(readVersion(DEFAULT_TMPDIR, 'is-number-5.0.0'), '5.0.0')
-  t.is(readVersion(DEFAULT_TMPDIR, 'is-number-6.0.0'), '6.0.0')
+  t.is(readVersion(DEFAULT_TMPDIR, '9-is-number-5.0.0'), '5.0.0')
+  t.is(readVersion(DEFAULT_TMPDIR, '9-is-number-6.0.0'), '6.0.0')
 })
 
 test('runs code requiring a package with and without a version', async t => {
