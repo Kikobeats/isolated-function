@@ -475,7 +475,7 @@ A call the code starts but never awaits does not take the run down, and a value 
 Type: `number`<br>
 Default: `32`
 
-Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count.
+Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count. Arguments that cannot be serialized are rejected the same way and do not reach the host. A value that is not a finite non-negative integer throws when the function is created.
 
 #### slot
 

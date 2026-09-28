@@ -106,6 +106,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
         throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
       }
     }
+    if (maxHostCalls !== undefined && (!Number.isInteger(maxHostCalls) || maxHostCalls < 0)) {
+      throw new TypeError('Expected `maxHostCalls` to be a finite non-negative integer')
+    }
     const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')

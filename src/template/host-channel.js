@@ -1,9 +1,10 @@
 'use strict'
 
 const HOST_CALL = 'globalThis.__isolated_host'
+const CLOSE_HOST = 'closeIsolatedHost'
 
 const source = methods => `
-    ${HOST_CALL} = (() => {
+    const ${CLOSE_HOST} = (() => {
       const request = process.send.bind(process)
       const disconnect = process.disconnect.bind(process)
       const pending = new Map()
@@ -40,14 +41,19 @@ const source = methods => `
         return answer
       }
 
-      call.methods = ${JSON.stringify(methods)}
-      call.close = () => {
+      const close = () => {
         if (closed) return
         closed = true
         settle('the host channel closed')
         disconnect()
       }
-      return call
+
+      call.methods = ${JSON.stringify(methods)}
+      call.close = close
+      ${HOST_CALL} = call
+      /* The template closes through this binding. The snippet can replace the
+         global or \`call.close\` and must not be able to keep the channel open. */
+      return close
     })()`
 
-module.exports = { source, HOST_CALL }
+module.exports = { source, HOST_CALL, CLOSE_HOST }

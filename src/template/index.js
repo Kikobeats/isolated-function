@@ -31,7 +31,7 @@ ${hostMethods ? hostChannel.source(hostMethods) : ''}
       value = ${SERIALIZE_ERROR}(error)
       isFulfilled = false
     } finally {
-      ${hostMethods ? `${hostChannel.HOST_CALL}.close()` : ''}
+      ${hostMethods ? `${hostChannel.CLOSE_HOST}()` : ''}
       respond(isFulfilled, value, performance.now() - t0, logging)
     }
   })

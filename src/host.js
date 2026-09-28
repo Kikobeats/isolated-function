@@ -41,6 +41,14 @@ const absorbSendError = () => {}
 
 const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
   const resolved = new Map()
+  /**
+   * Fixed when the run starts. A method added on `host` later is not reachable,
+   * and the function invoked is the one captured here.
+   */
+  const exposed = new Map()
+  for (const name of Object.keys(host)) {
+    if (typeof host[name] === 'function') exposed.set(name, host[name])
+  }
 
   /**
    * A value the channel cannot carry, such as a BigInt, makes `send` throw. The
@@ -59,20 +67,19 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
     }
   }
 
-  const resolve = (method, args) => {
+  const resolve = (fn, method, args) => {
     let key
     try {
       key = `${method}:${JSON.stringify(args)}`
     } catch {
-      key = undefined
+      return Promise.reject(new Error(TOO_MANY_CALLS))
     }
-    if (key === undefined) return Promise.resolve().then(() => host[method](...args))
 
     const seen = resolved.get(key)
     if (seen !== undefined) return seen
     if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
 
-    const pending = Promise.resolve().then(() => host[method](...args))
+    const pending = Promise.resolve().then(() => fn(...args))
     resolved.set(key, pending)
     return pending
   }
@@ -82,11 +89,12 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
     const child = this
     const { id, method, args = [] } = message
 
-    if (!Object.hasOwn(host, method) || typeof host[method] !== 'function') {
+    const fn = exposed.get(method)
+    if (fn === undefined) {
       return answer(child, id, { failed: true, reason: UNKNOWN_METHOD })
     }
 
-    resolve(method, args)
+    resolve(fn, method, args)
       .then(
         value => answer(child, id, { value }),
         error => answer(child, id, { failed: true, reason: describe(error) })

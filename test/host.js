@@ -1,8 +1,9 @@
 'use strict'
 
+const { EventEmitter } = require('events')
 const { default: test } = require('ava')
 
-const { UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE } = require('../src/host')
+const { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE } = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -292,4 +293,87 @@ test('a rejection value that cannot even be stringified still answers', async t 
     }
   )
   t.is(value, INDESCRIBABLE)
+})
+
+test('replacing the host closer cannot keep the channel open', async t => {
+  const { value } = await run(async () => {
+    globalThis.__isolated_host.close = () => {}
+    return 'returned'
+  })
+  t.is(value, 'returned')
+})
+
+test('removing the host global cannot keep the channel open', async t => {
+  const { value } = await run(async () => {
+    globalThis.__isolated_host = undefined
+    return 'returned'
+  })
+  t.is(value, 'returned')
+})
+
+test('a host call budget that is not a finite non-negative integer is refused', t => {
+  const message = 'Expected `maxHostCalls` to be a finite non-negative integer'
+  for (const maxHostCalls of [NaN, Infinity, -1, 1.5]) {
+    t.throws(() => isolatedFunction(async () => 1, { host: HOST, maxHostCalls }), { message })
+  }
+})
+
+test('a host call budget of zero reaches nothing', async t => {
+  const { value, calls } = await run(
+    async () => {
+      try {
+        return await globalThis.__isolated_host('content')
+      } catch (error) {
+        return error.message
+      }
+    },
+    HOST,
+    { maxHostCalls: 0 }
+  )
+  t.is(value, TOO_MANY_CALLS)
+  t.deepEqual(calls, [])
+})
+
+test('a method added after the run starts is refused', async t => {
+  const calls = []
+  const host = {
+    open () {
+      calls.push('open')
+      host.later = () => {
+        calls.push('later')
+        return 'reached'
+      }
+      return 'opened'
+    }
+  }
+  const { value } = await isolatedFunction(
+    async () => {
+      await globalThis.__isolated_host('open')
+      try {
+        return await globalThis.__isolated_host('later')
+      } catch (error) {
+        return error.message
+      }
+    },
+    { host, timeout: 20000 }
+  )()
+  t.is(value, UNKNOWN_METHOD)
+  t.deepEqual(calls, ['open'])
+})
+
+test('arguments that cannot be keyed do not reach the host', async t => {
+  const child = new EventEmitter()
+  const replies = []
+  let calls = 0
+  child.connected = true
+  child.send = message => {
+    replies.push(message)
+  }
+  attach(child, { ping: () => calls++ }, { maxCalls: 1 })
+  const args = []
+  args.push(args)
+  child.emit('message', { id: 1, method: 'ping', args })
+  await Promise.resolve()
+  t.is(calls, 0)
+  t.deepEqual(replies, [{ id: 1, failed: true, reason: TOO_MANY_CALLS }])
 })

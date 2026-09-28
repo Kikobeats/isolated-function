@@ -129,7 +129,10 @@ export interface IsolatedFunctionOptions {
    * something in the child asked, never that the snippet asked.
    */
   host?: Record<string, (...args: any[]) => unknown>
-  /** Distinct host calls allowed per run, rejecting the rest. Defaults to 32. */
+  /**
+   * Distinct host calls allowed per run, rejecting the rest. Defaults to 32.
+   * A value that is not a finite non-negative integer throws when the function is created.
+   */
   maxHostCalls?: number
   /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
