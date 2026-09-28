@@ -3,6 +3,8 @@
 const HOST_CALL = 'globalThis.__isolated_host'
 const CLOSE_HOST = 'closeIsolatedHost'
 
+/* The template calls the returned closer. The snippet can replace the global
+   or `call.close` and must not be able to keep the channel open. */
 const source = methods => `
     const ${CLOSE_HOST} = (() => {
       const request = process.send.bind(process)
@@ -51,9 +53,7 @@ const source = methods => `
       call.methods = ${JSON.stringify(methods)}
       call.close = close
       ${HOST_CALL} = call
-      /* The template closes through this binding. The snippet can replace the
-         global or \`call.close\` and must not be able to keep the channel open. */
       return close
     })()`
 
-module.exports = { source, HOST_CALL, CLOSE_HOST }
+module.exports = { source, CLOSE_HOST }

@@ -55,14 +55,14 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
    * isolate is waiting on this id and would otherwise wait until its timeout,
    * so the failure is reported over the same reply.
    */
-  const answer = (child, id, outcome) => {
-    if (!child.connected) return
+  const answer = (id, outcome) => {
+    if (!subprocess.connected) return
     try {
-      child.send({ id, ...outcome }, absorbSendError)
+      subprocess.send({ id, ...outcome }, absorbSendError)
     } catch (error) {
       if (outcome.failed) return
       try {
-        child.send({ id, failed: true, reason: describe(error) }, absorbSendError)
+        subprocess.send({ id, failed: true, reason: describe(error) }, absorbSendError)
       } catch {}
     }
   }
@@ -84,20 +84,17 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
     return pending
   }
 
-  subprocess.on('message', function (message) {
+  subprocess.on('message', message => {
     if (!isWellFormed(message)) return
-    const child = this
     const { id, method, args = [] } = message
 
     const fn = exposed.get(method)
-    if (fn === undefined) {
-      return answer(child, id, { failed: true, reason: UNKNOWN_METHOD })
-    }
+    if (fn === undefined) return answer(id, { failed: true, reason: UNKNOWN_METHOD })
 
     resolve(fn, method, args)
       .then(
-        value => answer(child, id, { value }),
-        error => answer(child, id, { failed: true, reason: describe(error) })
+        value => answer(id, { value }),
+        error => answer(id, { failed: true, reason: describe(error) })
       )
       .catch(() => {})
   })
