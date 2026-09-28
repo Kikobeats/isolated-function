@@ -1,8 +1,9 @@
 'use strict'
 
 const SERIALIZE_ERROR = require('./serialize-error')
+const hostChannel = require('./host-channel')
 
-module.exports = snippet => `;(send => {
+module.exports = (snippet, { hostMethods } = {}) => `;(send => {
   process.stdout.write = function () {}
   const baseline = process.memoryUsage().rss
   const memory = () => { const m = process.memoryUsage(); return {total: m.rss, used: Math.max(0, m.rss - baseline), heap: m.heapUsed, external: m.external} }
@@ -10,6 +11,7 @@ module.exports = snippet => `;(send => {
 
   return Promise.resolve().then(async () => {
     const args = JSON.parse(globalThis.__isolated_args)
+${hostMethods ? hostChannel.source(hostMethods) : ''}
 
     /* https://github.com/Kikobeats/null-prototype-object */
     const logging = new (/* @__PURE__ */ (() => { let e = function(){}; return e.prototype = Object.create(null), Object.freeze(e.prototype), e })());
@@ -29,6 +31,7 @@ module.exports = snippet => `;(send => {
       value = ${SERIALIZE_ERROR}(error)
       isFulfilled = false
     } finally {
+      ${hostMethods ? `${hostChannel.HOST_CALL}.close()` : ''}
       respond(isFulfilled, value, performance.now() - t0, logging)
     }
   })

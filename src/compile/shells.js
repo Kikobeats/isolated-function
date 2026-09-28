@@ -84,8 +84,14 @@ const toKeyPart = value => {
   return serializable ? json ?? 'undefined' : undefined
 }
 
-const keyOf = (snippet, { tmpdir, allow, nodePaths, esbuild }) => {
-  const options = toKeyPart({ tmpdir, dependencies: allow?.dependencies, nodePaths, esbuild })
+const keyOf = (snippet, { tmpdir, allow, nodePaths, esbuild, hostMethods }) => {
+  const options = toKeyPart({
+    tmpdir,
+    dependencies: allow?.dependencies,
+    nodePaths,
+    esbuild,
+    hostMethods
+  })
   if (options === undefined) return undefined
   return createHash('sha256').update(snippet).update('\0').update(options).digest('hex')
 }

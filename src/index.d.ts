@@ -107,6 +107,19 @@ export interface IsolatedFunctionOptions {
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
   /**
+   * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
+   * Each is resolved when the snippet asks for it and never before, so work the
+   * snippet does not reach costs nothing. The same method and arguments resolve
+   * once per run.
+   *
+   * The isolate runs untrusted code and can write to the channel descriptor
+   * directly, so treat every argument as untrusted input: a message proves that
+   * something in the child asked, never that the snippet asked.
+   */
+  host?: Record<string, (...args: any[]) => unknown>
+  /** Distinct host calls allowed per run, rejecting the rest. Defaults to 32. */
+  maxHostCalls?: number
+  /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
    * and cached, and each call only fills the slot, so calls that differ only in
    * this code skip bundling. Code that requires npm packages or uses

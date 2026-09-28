@@ -165,3 +165,10 @@ expectType<IsolatedFn<unknown>>(slotted)
 expectType<string>(createIsolatedFunction.SLOT)
 expectType<number>(isolatedFunction.shells.bytes)
 createIsolatedFunction({ shellCacheBytes: 16 * 1024 * 1024 })
+
+expectType<IsolatedFn<string>>(
+  isolatedFunction(async () => (globalThis as any).__isolated_host('content') as string, {
+    host: { content: async () => '<html></html>' },
+    maxHostCalls: 4
+  })
+)
