@@ -2,7 +2,7 @@
 
 const { default: test } = require('ava')
 
-const { UNKNOWN_METHOD, TOO_MANY_CALLS } = require('../src/host')
+const { UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE } = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -273,4 +273,23 @@ test('a host throwing before it returns a promise still answers', async t => {
     }
   )
   t.is(value, 'refused before starting')
+})
+
+test('a rejection value that cannot even be stringified still answers', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('opaque')
+      } catch (error) {
+        return error.message
+      }
+    },
+    {
+      opaque: () =>
+        Promise.resolve().then(() => {
+          throw Object.create(null)
+        })
+    }
+  )
+  t.is(value, INDESCRIBABLE)
 })

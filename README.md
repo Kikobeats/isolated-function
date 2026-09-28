@@ -461,7 +461,7 @@ In TypeScript the call is typed by the exported `HostCall`, since the global exi
 ```ts
 import { HostCall } from 'isolated-function'
 
-const host = globalThis.__isolated_host as HostCall
+const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
 ```
 
 The same method and arguments resolve once per run, so asking twice costs one resolution.

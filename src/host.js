@@ -21,8 +21,16 @@ const isWellFormed = message =>
  * A rejection value is whatever the host method threw, which need not be an
  * Error, and the reason travels as JSON regardless.
  */
-const describe = value =>
-  value instanceof Error && typeof value.message === 'string' ? value.message : String(value)
+const INDESCRIBABLE = 'the host failed with a value that cannot be described'
+
+const describe = value => {
+  try {
+    if (value instanceof Error && typeof value.message === 'string') return value.message
+    return String(value)
+  } catch {
+    return INDESCRIBABLE
+  }
+}
 
 /**
  * A snippet that never awaits its call can finish and close the channel while
@@ -78,11 +86,13 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
       return answer(child, id, { failed: true, reason: UNKNOWN_METHOD })
     }
 
-    resolve(method, args).then(
-      value => answer(child, id, { value }),
-      error => answer(child, id, { failed: true, reason: describe(error) })
-    )
+    resolve(method, args)
+      .then(
+        value => answer(child, id, { value }),
+        error => answer(child, id, { failed: true, reason: describe(error) })
+      )
+      .catch(() => {})
   })
 }
 
-module.exports = { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, DEFAULT_MAX_CALLS }
+module.exports = { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE, DEFAULT_MAX_CALLS }

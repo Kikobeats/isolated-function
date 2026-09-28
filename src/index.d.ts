@@ -101,7 +101,7 @@ export interface CreateOptions {
  * would also typecheck a call from the process that never has it.
  *
  * ```ts
- * const host = globalThis.__isolated_host as HostCall
+ * const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
  * ```
  */
 export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
