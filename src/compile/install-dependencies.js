@@ -130,7 +130,7 @@ const bundleAliases = (cwd, requireAs) => {
 }
 
 const validateDependencies = (dependencies, allowed) => {
-  // Always check for command injection, regardless of allow list
+  // A space is an invalid package name. Check it even when no allow list is set.
   for (const dependency of dependencies) {
     if (dependency.includes(' ')) {
       throw new DependencyNameError(dependency)
