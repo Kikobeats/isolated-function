@@ -123,20 +123,90 @@ test('allow.dependencies › blocks invalid package names with spaces', async t 
   t.true(error.message.includes('not a valid npm package name'))
 })
 
-test('pnpm install resolves @latest past minimumReleaseAge', async t => {
-  t.timeout(30_000)
-  t.true(installDependencies.install.includes('--config.minimum-release-age=0'))
+const readVersion = (cwd, name) =>
+  JSON.parse(readFileSync(join(cwd, 'node_modules', name, 'package.json'), 'utf8')).version
 
-  const cwd = mkdtempSync(join(tmpdir(), 'isolated-fn-age-'))
+const freshDir = t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'isolated-fn-install-'))
   t.teardown(() => rmSync(cwd, { recursive: true, force: true }))
+  return cwd
+}
+
+test('install resolves @latest past minimum release age', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
 
   await installDependencies({ dependencies: ['xml-urls@latest'], cwd })
 
-  const { version } = JSON.parse(
-    readFileSync(join(cwd, 'node_modules/xml-urls/package.json'), 'utf8')
-  )
   const latest = execSync('npm view xml-urls version', { encoding: 'utf8' }).trim()
-  t.is(version, latest)
+  t.is(readVersion(cwd, 'xml-urls'), latest)
+})
+
+test.serial('install ignores a minimum release age from npm config', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+  const previous = process.env.npm_config_min_release_age
+  process.env.npm_config_min_release_age = '36500'
+  t.teardown(() => {
+    if (previous === undefined) delete process.env.npm_config_min_release_age
+    else process.env.npm_config_min_release_age = previous
+  })
+
+  await installDependencies({ dependencies: ['is-number@latest'], cwd })
+
+  const latest = execSync('npm view is-number version', { encoding: 'utf8' }).trim()
+  t.is(readVersion(cwd, 'is-number'), latest)
+})
+
+test('install into an empty directory creates its package.json', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@7.0.0'], cwd })
+
+  const { dependencies } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  t.deepEqual(dependencies, { 'is-number': '7.0.0' })
+  t.is(readVersion(cwd, 'is-number'), '7.0.0')
+})
+
+test('install keeps dependencies already installed in the directory', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@7.0.0'], cwd })
+  await installDependencies({ dependencies: ['is-standard-emoji@1.0.0'], cwd })
+
+  t.is(readVersion(cwd, 'is-number'), '7.0.0')
+  t.is(readVersion(cwd, 'is-standard-emoji'), '1.0.0')
+})
+
+test('install prefers the explicit version when a package is required twice', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@latest', 'is-number@6.0.0'], cwd })
+
+  t.is(readVersion(cwd, 'is-number'), '6.0.0')
+})
+
+test('runs code requiring a package with and without a version', async t => {
+  const fn = isolatedFunction(() => {
+    const pinned = require('is-number@7.0.0')
+    const floating = require('is-number')
+    return pinned(1) && floating(2)
+  })
+
+  t.is(await run(fn()), true)
+})
+
+test('install rejects a package missing from the registry', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  const error = await t.throwsAsync(
+    installDependencies({ dependencies: ['isolated-function-missing-package-zzz'], cwd })
+  )
+  t.is(error.code, 'E404')
 })
 
 test('allow.dependencies › blocks invalid package names even without allow list', async t => {

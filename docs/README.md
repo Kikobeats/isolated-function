@@ -172,6 +172,8 @@ The hosted code and its dependencies are bundled into a single file with [esbuil
 
 Dependencies are installed into a shared persistent directory and reused across invocations, so only the first call that requires a given package pays the install cost.
 
+Installation runs in-process through [upm](https://github.com/unjs/upm), so no package manager needs to be on the `PATH`. Package lifecycle scripts never run, a required package without a version resolves to its latest release with no minimum release age, and downloaded packages are cached in upm's shared store (`~/.upm/store`, or `UPM_STORE`).
+
 ## Restricting allowed dependencies
 
 If the code is untrusted, do not let it install arbitrary packages. Use `allow.dependencies` to define the packages it may use:

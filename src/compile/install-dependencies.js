@@ -1,20 +1,18 @@
 'use strict'
 
-const { execSync } = require('child_process')
-const $ = require('tinyspawn')
+const { writeFileSync } = require('fs')
+const { add } = require('upm')
+const path = require('path')
 
 const { DependencyNameError, DependencyUnallowedError } = require('../errors')
 
-const install = (() => {
+const ensurePackageJson = cwd => {
   try {
-    execSync('which pnpm', { stdio: ['pipe', 'pipe', 'ignore'] })
-      .toString()
-      .trim()
-    return 'pnpm install --no-lockfile --ignore-workspace-root-check --ignore-scripts --engine-strict=false --config.minimum-release-age=0'
-  } catch {
-    return 'npm install --no-package-lock --ignore-scripts --silent'
+    writeFileSync(path.join(cwd, 'package.json'), '{}\n', { flag: 'wx' })
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error
   }
-})()
+}
 
 const extractPackageName = dependency => {
   if (dependency.startsWith('@')) {
@@ -32,6 +30,16 @@ const extractPackageName = dependency => {
     }
   }
   return dependency
+}
+
+const uniqueByName = dependencies => {
+  const byName = new Map()
+  for (const dependency of dependencies) {
+    const name = extractPackageName(dependency)
+    const current = byName.get(name)
+    if (current === undefined || current === `${name}@latest`) byName.set(name, dependency)
+  }
+  return [...byName.values()]
 }
 
 const validateDependencies = (dependencies, allowed) => {
@@ -54,9 +62,9 @@ const validateDependencies = (dependencies, allowed) => {
 
 module.exports = async ({ dependencies, cwd, allow = {} }) => {
   validateDependencies(dependencies, allow.dependencies)
-  return $(`${install} ${dependencies.join(' ')}`, { cwd, env: { ...process.env, CI: true } })
+  ensurePackageJson(cwd)
+  return add(uniqueByName(dependencies), { dir: cwd, minReleaseAge: 0 })
 }
 
-module.exports.install = install
 module.exports.validateDependencies = validateDependencies
 module.exports.extractPackageName = extractPackageName
