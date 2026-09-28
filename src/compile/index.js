@@ -33,9 +33,11 @@ module.exports = async (
 
   const allDependencies = detectDependencies(content)
   installDependencies.validateDependencies(allDependencies, allow.dependencies)
+  const plan = installDependencies.planDependencies(allDependencies)
   const dependencies = nodePaths.length
     ? allDependencies.filter(dep => {
       const name = installDependencies.extractPackageName(dep)
+      if (plan.requireAs.get(dep) !== name) return true
       const version = dep.slice(name.length + 1)
       for (const np of nodePaths) {
         try {
@@ -49,19 +51,25 @@ module.exports = async (
     : allDependencies
 
   if (dependencies.length) {
-    content = transformDependencies(content)
+    content = transformDependencies(content, plan.requireAs)
     mkdirSync(tmpdir, { recursive: true })
     const elapsed = timeSpan()
     await enqueueInstall(tmpdir, dependencies, allow)
     phases.install = elapsed()
   } else if (allDependencies.length) {
-    content = transformDependencies(content)
+    content = transformDependencies(content, plan.requireAs)
     mkdirSync(tmpdir, { recursive: true })
   }
 
   const cwd = allDependencies.length ? tmpdir : process.cwd()
+  const alias = { ...installDependencies.bundleAliases(cwd, plan.requireAs), ...esbuild?.alias }
   const elapsed = timeSpan()
-  const result = await build({ content, cwd, nodePaths, esbuild })
+  const result = await build({
+    content,
+    cwd,
+    nodePaths,
+    esbuild: Object.keys(alias).length ? { ...esbuild, alias } : esbuild
+  })
   phases.build = elapsed()
   content = result.outputFiles[0].text
 

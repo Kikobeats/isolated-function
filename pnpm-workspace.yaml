@@ -1,4 +1,4 @@
 minimumReleaseAgeExclude:
-  - upm@1.1.0
+  - upm
 overrides:
   c8>yargs: "npm:yargs@18"

@@ -21,6 +21,23 @@ test('detect requires', t => {
   )
 })
 
+test('rewrites two versions of one package to alias names', t => {
+  const code = `
+    const five = require('is-number@5.0.0');
+    const six = require('is-number@6.0.0');`
+  const requireAs = new Map([
+    ['is-number@5.0.0', 'is-number-5.0.0'],
+    ['is-number@6.0.0', 'is-number-6.0.0']
+  ])
+
+  t.is(
+    transformDependencies(code, requireAs),
+    `
+    const five = require('is-number-5.0.0');
+    const six = require('is-number-6.0.0');`
+  )
+})
+
 test('detect imports', t => {
   const code = `
     import puppeteer from '@cloudflare/puppeteer@1.2.3';

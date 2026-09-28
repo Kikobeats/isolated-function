@@ -6,8 +6,14 @@ const { tmpdir } = require('os')
 const { join } = require('path')
 const test = require('ava')
 
-const { DependencyNameError, DependencyUnallowedError } = require('../../src/errors')
+const {
+  DependencyConflictError,
+  DependencyNameError,
+  DependencyUnallowedError
+} = require('../../src/errors')
 const installDependencies = require('../../src/compile/install-dependencies')
+const { DEFAULT_TMPDIR } = require('../../src/compile')
+const compile = require('../../src/compile')
 const isolatedFunction = require('../..')()
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
@@ -180,6 +186,32 @@ test('install keeps dependencies already installed in the directory', async t =>
   t.is(readVersion(cwd, 'is-standard-emoji'), '1.0.0')
 })
 
+test('two versions of one package install as npm aliases', t => {
+  const { install, requireAs } = installDependencies.planDependencies([
+    'is-number@5.0.0',
+    'is-number@6.0.0'
+  ])
+
+  t.deepEqual(install, [
+    'is-number-5.0.0@npm:is-number@5.0.0',
+    'is-number-6.0.0@npm:is-number@6.0.0'
+  ])
+  t.is(requireAs.get('is-number@5.0.0'), 'is-number-5.0.0')
+  t.is(requireAs.get('is-number@6.0.0'), 'is-number-6.0.0')
+})
+
+test('a versionless require mixed with two versions is rejected', async t => {
+  const error = await t.throwsAsync(
+    installDependencies({
+      dependencies: ['is-number@latest', 'is-number@5.0.0', 'is-number@6.0.0'],
+      cwd: join(tmpdir(), 'isolated-fn-conflict-should-not-exist')
+    })
+  )
+
+  t.true(error instanceof DependencyConflictError)
+  t.is(error.dependency, 'is-number')
+})
+
 test('install prefers the explicit version when a package is required twice', async t => {
   t.timeout(30_000)
   const cwd = freshDir(t)
@@ -187,6 +219,40 @@ test('install prefers the explicit version when a package is required twice', as
   await installDependencies({ dependencies: ['is-number@latest', 'is-number@6.0.0'], cwd })
 
   t.is(readVersion(cwd, 'is-number'), '6.0.0')
+})
+
+test('bundles one copy of a version another package already depends on', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  const { content } = await compile(
+    () => {
+      const five = require('is-number@5.0.0')
+      const six = require('is-number@6.0.0')
+      const odd = require('is-odd@3.0.1')
+      return five(1) && six(1) && odd(1)
+    },
+    {
+      tmpdir: cwd,
+      esbuild: { minifyWhitespace: false, minifySyntax: false, legalComments: 'none' }
+    }
+  )
+
+  t.is(content.split('number - number').length - 1, 1)
+  t.is(content.split('num - num + 1').length - 1, 1)
+})
+
+test('runs code requiring two versions of one package', async t => {
+  t.timeout(30_000)
+  const fn = isolatedFunction(() => {
+    const five = require('is-number@5.0.0')
+    const six = require('is-number@6.0.0')
+    return five(1) && six(2)
+  })
+
+  t.is(await run(fn()), true)
+  t.is(readVersion(DEFAULT_TMPDIR, 'is-number-5.0.0'), '5.0.0')
+  t.is(readVersion(DEFAULT_TMPDIR, 'is-number-6.0.0'), '6.0.0')
 })
 
 test('runs code requiring a package with and without a version', async t => {

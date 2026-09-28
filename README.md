@@ -209,7 +209,7 @@ await fn()
 // => DependencyUnallowedError: Dependency 'malicious-package' is not in the allowed list
 ```
 
-> **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because packages can execute code during installation via `preinstall`/`postinstall` scripts. The `--ignore-scripts` flag is used to mitigate this, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.
+> **Security Note**: Even with the sandbox, arbitrary package installation is dangerous because packages can execute code during installation via `preinstall`/`postinstall` scripts. Installation never runs those lifecycle scripts, but providing an `allow.dependencies` whitelist is the recommended approach for running untrusted code.
 
 ## Execution profiling
 
