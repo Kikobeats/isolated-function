@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.9 (2026-09-28)
+
+
+### Features
+
+* install dependencies with upm ([#82](https://github.com/Kikobeats/isolated-function/issues/82)) ([9f625cf](https://github.com/Kikobeats/isolated-function/commit/9f625cf83d92417cdadfaa17bf4ede359f22c9c8))
+
 ### 0.2.8 (2026-09-21)
 
 
