@@ -36,7 +36,8 @@ const extractPackageName = dependency => {
   return dependency
 }
 
-const aliasName = (name, version) => `${name}-${version.replace(/[^A-Za-z0-9._-]+/g, '-')}`
+const aliasName = (name, version) =>
+  `${name}-${version.replace(/[^A-Za-z0-9._-]/g, char => `_${char.codePointAt(0).toString(16)}_`)}`
 
 const planDependencies = dependencies => {
   const groups = new Map()

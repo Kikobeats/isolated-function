@@ -200,6 +200,15 @@ test('two versions of one package install as npm aliases', t => {
   t.is(requireAs.get('is-number@6.0.0'), 'is-number-6.0.0')
 })
 
+test('caret and tilde ranges get different alias names', t => {
+  const { install } = installDependencies.planDependencies(['is-number@^6.0.0', 'is-number@~6.0.0'])
+
+  t.deepEqual(install, [
+    'is-number-_5e_6.0.0@npm:is-number@^6.0.0',
+    'is-number-_7e_6.0.0@npm:is-number@~6.0.0'
+  ])
+})
+
 test('a versionless require mixed with two versions is rejected', async t => {
   const error = await t.throwsAsync(
     installDependencies({
