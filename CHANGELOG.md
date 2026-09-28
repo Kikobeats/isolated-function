@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.10 (2026-09-28)
+
+
+### Features
+
+* let a snippet call back into the host ([#83](https://github.com/Kikobeats/isolated-function/issues/83)) ([8b4ae1a](https://github.com/Kikobeats/isolated-function/commit/8b4ae1a1905b21ea96a880821cb320097be6e579))
+
 ### 0.2.9 (2026-09-28)
 
 
