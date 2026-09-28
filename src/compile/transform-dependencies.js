@@ -19,41 +19,36 @@ const acorn = require('acorn')
  * should only reference the base module name.
  *
  * @param {string} code - JavaScript code containing require() or import statements
+ * @param {Map<string, string>} [requireAs] - Spec to module name. Two versions of one package map to npm alias names.
  * @returns {string} Transformed code with version specifiers removed from dependencies
  */
-module.exports = code => {
+module.exports = (code, requireAs = new Map()) => {
   const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
 
   let newCode = ''
   let lastIndex = 0
 
   // Helper function to process and transform nodes
-  const processNode = node => {
-    if (node.type === 'Literal' && node.value.includes('@')) {
-      // Check if it's a scoped module
-      if (node.value.startsWith('@')) {
-        // Handle scoped packages
-        const slashIndex = node.value.indexOf('/')
-        if (slashIndex !== -1) {
-          const atVersionIndex = node.value.indexOf('@', slashIndex)
-          const moduleName =
-            atVersionIndex !== -1 ? node.value.substring(0, atVersionIndex) : node.value
-          // Append code before this node
-          newCode += code.substring(lastIndex, node.start)
-          // Append transformed dependency
-          newCode += `'${moduleName}'`
-        }
-      } else {
-        // Handle non-scoped packages
-        const [moduleName] = node.value.split('@')
-        // Append code before this node
-        newCode += code.substring(lastIndex, node.start)
-        // Append transformed dependency
-        newCode += `'${moduleName}'`
-      }
-      // Update lastIndex to end of current node
-      lastIndex = node.end
+  const moduleName = value => {
+    const mapped = requireAs.get(value)
+    if (mapped) return mapped
+    if (typeof value !== 'string' || !value.includes('@')) return
+    if (value.startsWith('@')) {
+      const slashIndex = value.indexOf('/')
+      if (slashIndex === -1) return
+      const atVersionIndex = value.indexOf('@', slashIndex)
+      return atVersionIndex === -1 ? undefined : value.substring(0, atVersionIndex)
     }
+    return value.split('@')[0]
+  }
+
+  const processNode = node => {
+    if (node.type !== 'Literal') return
+    const name = moduleName(node.value)
+    if (!name || name === node.value) return
+    newCode += code.substring(lastIndex, node.start)
+    newCode += `'${name}'`
+    lastIndex = node.end
   }
 
   // Traverse the AST to find require and import declarations

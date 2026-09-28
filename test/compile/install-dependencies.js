@@ -6,8 +6,14 @@ const { tmpdir } = require('os')
 const { join } = require('path')
 const test = require('ava')
 
-const { DependencyNameError, DependencyUnallowedError } = require('../../src/errors')
+const {
+  DependencyConflictError,
+  DependencyNameError,
+  DependencyUnallowedError
+} = require('../../src/errors')
 const installDependencies = require('../../src/compile/install-dependencies')
+const { DEFAULT_TMPDIR } = require('../../src/compile')
+const compile = require('../../src/compile')
 const isolatedFunction = require('../..')()
 
 const run = promise => Promise.resolve(promise).then(({ value }) => value)
@@ -123,20 +129,168 @@ test('allow.dependencies › blocks invalid package names with spaces', async t 
   t.true(error.message.includes('not a valid npm package name'))
 })
 
-test('pnpm install resolves @latest past minimumReleaseAge', async t => {
-  t.timeout(30_000)
-  t.true(installDependencies.install.includes('--config.minimum-release-age=0'))
+const readVersion = (cwd, name) =>
+  JSON.parse(readFileSync(join(cwd, 'node_modules', name, 'package.json'), 'utf8')).version
 
-  const cwd = mkdtempSync(join(tmpdir(), 'isolated-fn-age-'))
+const freshDir = t => {
+  const cwd = mkdtempSync(join(tmpdir(), 'isolated-fn-install-'))
   t.teardown(() => rmSync(cwd, { recursive: true, force: true }))
+  return cwd
+}
+
+test('install resolves @latest past minimum release age', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
 
   await installDependencies({ dependencies: ['xml-urls@latest'], cwd })
 
-  const { version } = JSON.parse(
-    readFileSync(join(cwd, 'node_modules/xml-urls/package.json'), 'utf8')
-  )
   const latest = execSync('npm view xml-urls version', { encoding: 'utf8' }).trim()
-  t.is(version, latest)
+  t.is(readVersion(cwd, 'xml-urls'), latest)
+})
+
+test.serial('install ignores a minimum release age from npm config', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+  const previous = process.env.npm_config_min_release_age
+  process.env.npm_config_min_release_age = '36500'
+  t.teardown(() => {
+    if (previous === undefined) delete process.env.npm_config_min_release_age
+    else process.env.npm_config_min_release_age = previous
+  })
+
+  await installDependencies({ dependencies: ['is-number@latest'], cwd })
+
+  const latest = execSync('npm view is-number version', { encoding: 'utf8' }).trim()
+  t.is(readVersion(cwd, 'is-number'), latest)
+})
+
+test('install into an empty directory creates its package.json', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@7.0.0'], cwd })
+
+  const { dependencies } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
+  t.deepEqual(dependencies, { 'is-number': '7.0.0' })
+  t.is(readVersion(cwd, 'is-number'), '7.0.0')
+})
+
+test('install keeps dependencies already installed in the directory', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@7.0.0'], cwd })
+  await installDependencies({ dependencies: ['is-standard-emoji@1.0.0'], cwd })
+
+  t.is(readVersion(cwd, 'is-number'), '7.0.0')
+  t.is(readVersion(cwd, 'is-standard-emoji'), '1.0.0')
+})
+
+test('two versions of one package install as npm aliases', t => {
+  const { install, requireAs } = installDependencies.planDependencies([
+    'is-number@5.0.0',
+    'is-number@6.0.0'
+  ])
+
+  t.deepEqual(install, [
+    '9-is-number-5.0.0@npm:is-number@5.0.0',
+    '9-is-number-6.0.0@npm:is-number@6.0.0'
+  ])
+  t.is(requireAs.get('is-number@5.0.0'), '9-is-number-5.0.0')
+  t.is(requireAs.get('is-number@6.0.0'), '9-is-number-6.0.0')
+})
+
+test('caret and tilde ranges get different alias names', t => {
+  const { install } = installDependencies.planDependencies(['is-number@^6.0.0', 'is-number@~6.0.0'])
+
+  t.deepEqual(install, [
+    '9-is-number-_5e_6.0.0@npm:is-number@^6.0.0',
+    '9-is-number-_7e_6.0.0@npm:is-number@~6.0.0'
+  ])
+})
+
+test('a package name does not collide with a longer name plus a shorter version', t => {
+  const ranged = installDependencies.planDependencies(['foo@1.0.0-2.0.0', 'foo@2.0.0'])
+  const prefixed = installDependencies.planDependencies(['foo-1.0.0@2.0.0', 'foo-1.0.0@3.0.0'])
+  const rangedAlias = ranged.install.find(spec => spec.includes('1.0.0-2.0.0')).split('@npm:')[0]
+  const prefixedAlias = prefixed.install.find(spec => spec.endsWith('@2.0.0')).split('@npm:')[0]
+
+  t.not(rangedAlias, prefixedAlias)
+})
+
+test('a versionless require mixed with two versions is rejected', async t => {
+  const error = await t.throwsAsync(
+    installDependencies({
+      dependencies: ['is-number@latest', 'is-number@5.0.0', 'is-number@6.0.0'],
+      cwd: join(tmpdir(), 'isolated-fn-conflict-should-not-exist')
+    })
+  )
+
+  t.true(error instanceof DependencyConflictError)
+  t.is(error.dependency, 'is-number')
+})
+
+test('install prefers the explicit version when a package is required twice', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@latest', 'is-number@6.0.0'], cwd })
+
+  t.is(readVersion(cwd, 'is-number'), '6.0.0')
+})
+
+test('bundles one copy of a version another package already depends on', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  const { content } = await compile(
+    () => {
+      const five = require('is-number@5.0.0')
+      const six = require('is-number@6.0.0')
+      const odd = require('is-odd@3.0.1')
+      return five(1) && six(1) && odd(1)
+    },
+    {
+      tmpdir: cwd,
+      esbuild: { minifyWhitespace: false, minifySyntax: false, legalComments: 'none' }
+    }
+  )
+
+  t.is(content.split('number - number').length - 1, 1)
+  t.is(content.split('num - num + 1').length - 1, 1)
+})
+
+test('runs code requiring two versions of one package', async t => {
+  t.timeout(30_000)
+  const fn = isolatedFunction(() => {
+    const five = require('is-number@5.0.0')
+    const six = require('is-number@6.0.0')
+    return five(1) && six(2)
+  })
+
+  t.is(await run(fn()), true)
+  t.is(readVersion(DEFAULT_TMPDIR, '9-is-number-5.0.0'), '5.0.0')
+  t.is(readVersion(DEFAULT_TMPDIR, '9-is-number-6.0.0'), '6.0.0')
+})
+
+test('runs code requiring a package with and without a version', async t => {
+  const fn = isolatedFunction(() => {
+    const pinned = require('is-number@7.0.0')
+    const floating = require('is-number')
+    return pinned(1) && floating(2)
+  })
+
+  t.is(await run(fn()), true)
+})
+
+test('install rejects a package missing from the registry', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  const error = await t.throwsAsync(
+    installDependencies({ dependencies: ['isolated-function-missing-package-zzz'], cwd })
+  )
+  t.is(error.code, 'E404')
 })
 
 test('allow.dependencies › blocks invalid package names even without allow list', async t => {

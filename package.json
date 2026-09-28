@@ -49,7 +49,8 @@
     "ensure-error": "~3.0.1",
     "esbuild": "~0.28.0",
     "serialize-error": "8",
-    "tinyspawn": "~1.5.0"
+    "tinyspawn": "~1.5.0",
+    "upm": "~1.1.0"
   },
   "devDependencies": {
     "@commitlint/cli": "latest",

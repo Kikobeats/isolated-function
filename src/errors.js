@@ -25,8 +25,19 @@ class DependencyUnallowedError extends IsolatedFunctionError {
   }
 }
 
+class DependencyConflictError extends IsolatedFunctionError {
+  constructor (dependency, specs) {
+    const listed = specs.map(spec => `'${spec}'`).join(' and ')
+    super(`Dependency '${dependency}' is required as ${listed}`)
+    this.name = 'DependencyConflictError'
+    this.code = 'EDEPENDENCYCONFLICT'
+    this.dependency = dependency
+  }
+}
+
 module.exports = {
   IsolatedFunctionError,
   DependencyNameError,
-  DependencyUnallowedError
+  DependencyUnallowedError,
+  DependencyConflictError
 }
