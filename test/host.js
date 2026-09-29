@@ -463,6 +463,34 @@ test('overlapping repeats of one call stay outside the timeout', async t => {
   t.is(value, 'okok')
 })
 
+test('a host call awaited alongside other work pauses once that work ends', async t => {
+  const { value } = await run(
+    async () => {
+      const [answer] = await Promise.all([
+        globalThis.__isolated_host('slow'),
+        new Promise(resolve => setTimeout(resolve, 200))
+      ])
+      return answer
+    },
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('done'), 4000)) },
+    { timeout: 3000 }
+  )
+  t.is(value, 'done')
+})
+
+test('awaiting a repeated call after other work pauses the timeout again', async t => {
+  const { value } = await run(
+    async () => {
+      globalThis.__isolated_host('slow')
+      await new Promise(resolve => setTimeout(resolve, 200))
+      return globalThis.__isolated_host('slow')
+    },
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('done'), 4000)) },
+    { timeout: 3000 }
+  )
+  t.is(value, 'done')
+})
+
 test('awaiting a host call after other work pauses the timeout again', async t => {
   const { value } = await run(
     async () => {

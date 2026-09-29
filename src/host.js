@@ -141,9 +141,9 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
 
     const seen = resolved.get(key)
     if (seen !== undefined) {
-      /* A settled or released call ignores further signals, so its repeats
-         must not accumulate ids for the rest of the run. */
-      if (!seen.settled && !seen.released) byId.set(id, seen)
+      /* Settled calls ignore signals. A repeat stays addressable until then,
+         including after a release, so a later await can park the shared call. */
+      if (!seen.settled) byId.set(id, seen)
       return seen.promise
     }
     if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
