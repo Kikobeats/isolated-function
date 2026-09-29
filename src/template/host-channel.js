@@ -11,6 +11,11 @@ const source = methods => `
       const disconnect = process.disconnect.bind(process)
       const activeResources = process.getActiveResourcesInfo.bind(process)
       const onNextTurn = queueMicrotask.bind(globalThis)
+      const countResources = () => {
+        const counts = Object.create(null)
+        for (const type of activeResources()) counts[type] = (counts[type] ?? 0) + 1
+        return counts
+      }
       const pending = new Map()
       let lastId = 0
       let closed = false
@@ -32,6 +37,18 @@ const source = methods => `
         settle('the host channel closed before answering')
       })
 
+      /* Handles open before the snippet runs (stdio, the channel) are not
+         snippet work. The set depends on the platform, so compare counts
+         rather than assuming a pipe. */
+      const baseline = countResources()
+      const snippetIsRunning = () => {
+        const counts = countResources()
+        for (const type in counts) {
+          if (counts[type] > (baseline[type] ?? 0)) return true
+        }
+        return false
+      }
+
       const call = (method, args) => {
         const answer = new Promise((resolve, reject) => {
           if (closed) return reject(new Error('the host channel is already closed'))
@@ -39,11 +56,11 @@ const source = methods => `
           pending.set(id, { resolve, reject })
           request({ id, method, args })
           /* Pause covers this call only while the isolate is parked on the reply.
-             A timer or socket means the snippet kept running, so tell the parent
-             to put that time back on the wall clock. */
+             A new timer or socket means the snippet kept running, so tell the
+             parent to put that time back on the wall clock. */
           onNextTurn(() => {
             if (closed || !pending.has(id)) return
-            if (activeResources().every(type => type === 'PipeWrap')) return
+            if (!snippetIsRunning()) return
             request({ id, running: true })
           })
         })
