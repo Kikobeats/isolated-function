@@ -68,7 +68,7 @@ const source = methods => `
         }
         if (!interested) return
         followUps++
-        const timer = setTimeout(() => {
+        setTimeout(() => {
           /* This timer is still listed here, so leave it in the count until
              the check has subtracted it. */
           if (closed) {
@@ -86,7 +86,6 @@ const source = methods => `
           }
           if (running) scheduleFollowUp()
         }, 50)
-        timer.unref()
       }
 
       const call = (method, args) => {

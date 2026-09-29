@@ -504,6 +504,24 @@ test('awaiting a host call after other work pauses the timeout again', async t =
   t.is(value, 'done')
 })
 
+test('a timer beside a released host call still counts toward the timeout', async t => {
+  const error = await t.throwsAsync(
+    isolatedFunction(
+      async () => {
+        const pending = globalThis.__isolated_host('slow')
+        await new Promise(resolve => setTimeout(resolve, 50))
+        await Promise.all([pending, new Promise(resolve => setTimeout(resolve, 4000))])
+        return 'finished late'
+      },
+      {
+        host: { slow: () => new Promise(resolve => setTimeout(() => resolve('ok'), 5000)) },
+        timeout: 3000
+      }
+    )()
+  )
+  t.is(error.message, 'Execution timed out')
+})
+
 test('a host call the snippet does not await leaves the timeout running', async t => {
   const error = await t.throwsAsync(
     isolatedFunction(
