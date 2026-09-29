@@ -19,14 +19,23 @@ const isWellFormed = message =>
   (message.args === undefined || Array.isArray(message.args))
 
 /**
- * The isolate kept working after this call. Releasing the pause can only give
- * time back: a message cannot stop the clock on its own.
+ * The isolate kept working after this call. Releasing the pause gives time
+ * back. A later await can park the same call again; a message cannot pause a
+ * call this process did not already release.
  */
 const isStillRunning = message =>
   message !== null &&
   typeof message === 'object' &&
   Number.isInteger(message.id) &&
   message.running === true &&
+  message.method === undefined
+
+const isParked = message =>
+  message !== null &&
+  typeof message === 'object' &&
+  Number.isInteger(message.id) &&
+  message.parked === true &&
+  message.running !== true &&
   message.method === undefined
 
 /**
@@ -112,8 +121,14 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
     const invocation = byId.get(id)
     if (invocation === undefined || invocation.settled || invocation.released) return
     invocation.released = true
-    forget(invocation)
     if (invocation.held) clock?.resume()
+  }
+
+  const park = id => {
+    const invocation = byId.get(id)
+    if (invocation === undefined || invocation.settled || !invocation.released) return
+    invocation.released = false
+    if (invocation.held) clock?.pause()
   }
 
   const resolve = (id, fn, method, args) => {
@@ -156,6 +171,7 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
 
   subprocess.on('message', message => {
     if (isStillRunning(message)) return release(message.id)
+    if (isParked(message)) return park(message.id)
     if (!isWellFormed(message)) return
     const { id, method, args = [] } = message
 

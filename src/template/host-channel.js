@@ -55,6 +55,8 @@ const source = methods => `
       }
 
       const call = (method, args) => {
+        let armed = false
+        let watch = () => {}
         const answer = new Promise((resolve, reject) => {
           if (closed) return reject(new Error('the host channel is already closed'))
           const id = ++lastId
@@ -62,20 +64,49 @@ const source = methods => `
           request({ id, method, args })
           /* After the send flushes. A microtask still sees that write, and on
              Linux it looks like the snippet kept running. */
-          probes++
-          onNextTurn(() => {
-            /* This check's own Immediate is already off the list. What remains
-               of the probe count is the sibling checks still scheduled. */
-            probes--
-            if (closed || !pending.has(id)) return
-            if (!snippetIsRunning()) return
-            request({ id, running: true })
-          })
+          const probe = () => {
+            probes++
+            onNextTurn(() => {
+              /* This check's own Immediate is already off the list. What remains
+                 of the probe count is the sibling checks still scheduled. */
+              probes--
+              if (closed || !pending.has(id)) return
+              if (snippetIsRunning()) {
+                if (armed) return
+                armed = true
+                request({ id, running: true })
+                return
+              }
+              if (!armed) return
+              armed = false
+              request({ id, parked: true })
+            })
+          }
+          probe()
+          /* The internal catch is not an await. A later await of this same call
+             checks again, and parks only once the other work is gone. */
+          watch = () => {
+            if (armed) probe()
+          }
         })
         /* A call the snippet starts but never awaits must not take the run down
            with an unhandled rejection; awaiting it still surfaces the error. */
         answer.catch(() => {})
-        return answer
+        const waited = {
+          then (onFulfilled, onRejected) {
+            watch()
+            return answer.then(onFulfilled, onRejected)
+          },
+          catch (onRejected) {
+            watch()
+            return answer.catch(onRejected)
+          },
+          finally (onFinally) {
+            watch()
+            return answer.finally(onFinally)
+          }
+        }
+        return waited
       }
 
       const close = () => {
