@@ -3,7 +3,13 @@
 const { EventEmitter } = require('events')
 const { default: test } = require('ava')
 
-const { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE } = require('../src/host')
+const {
+  attach,
+  UNKNOWN_METHOD,
+  TOO_MANY_CALLS,
+  UNANSWERED_CALL,
+  INDESCRIBABLE
+} = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -177,6 +183,27 @@ test('a host exposing nothing is a mistake worth reporting', t => {
   t.throws(() => isolatedFunction(async () => 1, { host: {} }), {
     message: 'Expected `host` to expose a method'
   })
+})
+
+test('time awaiting the host is not part of the execution timeout', async t => {
+  const { value } = await run(
+    async () => globalThis.__isolated_host('slow'),
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('done'), 1000)) },
+    { timeout: 500 }
+  )
+  t.is(value, 'done')
+})
+
+test('a busy loop still hits the timeout while a host is attached', async t => {
+  const error = await t.throwsAsync(
+    isolatedFunction(
+      () => {
+        while (true) Date.now()
+      },
+      { host: HOST, timeout: 200 }
+    )()
+  )
+  t.is(error.message, 'Execution timed out')
 })
 
 test('a call the snippet never awaits does not take the run down', async t => {
@@ -390,4 +417,52 @@ test('arguments that cannot be keyed do not reach the host', async t => {
   await Promise.resolve()
   t.is(calls, 0)
   t.deepEqual(replies, [{ id: 1, failed: true, reason: TOO_MANY_CALLS }])
+})
+
+test('a host that never answers is bounded by hostCallTimeout', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('stuck')
+      } catch (error) {
+        return error.message
+      }
+    },
+    { stuck: () => new Promise(() => {}) },
+    { hostCallTimeout: 400 }
+  )
+  t.is(value, UNANSWERED_CALL)
+})
+
+test('a slow host outlives the execution timeout when nothing bounds it', async t => {
+  const { value } = await run(
+    async () => globalThis.__isolated_host('slow'),
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('answered'), 900)) },
+    { timeout: 500 }
+  )
+  t.is(value, 'answered')
+})
+
+test('a bounded call leaves the run able to continue', async t => {
+  const { value } = await run(
+    async () => {
+      try {
+        await globalThis.__isolated_host('stuck')
+      } catch {
+        return globalThis.__isolated_host('content')
+      }
+    },
+    { stuck: () => new Promise(() => {}), content: async () => 'second call worked' },
+    { hostCallTimeout: 300 }
+  )
+  t.is(value, 'second call worked')
+})
+
+test('hostCallTimeout must be a positive number', t => {
+  t.throws(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout: 0 }), {
+    message: 'Expected `hostCallTimeout` to be a positive number'
+  })
+  t.throws(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout: -1 }), {
+    message: 'Expected `hostCallTimeout` to be a positive number'
+  })
 })

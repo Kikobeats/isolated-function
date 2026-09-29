@@ -110,7 +110,10 @@ export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
  * Options for creating an isolated function
  */
 export interface IsolatedFunctionOptions {
-  /** Execution timeout in milliseconds. Also enforces a CPU time limit via RLIMIT_CPU. */
+  /**
+   * Execution timeout in milliseconds. Also enforces a CPU time limit via RLIMIT_CPU.
+   * Time spent awaiting a host call is excluded from the wall clock.
+   */
   timeout?: number
   /** Memory limit in megabytes */
   memory?: number
@@ -134,6 +137,13 @@ export interface IsolatedFunctionOptions {
    * A value that is not a finite non-negative integer throws when the function is created.
    */
   maxHostCalls?: number
+  /**
+   * How long a single host call may take before it rejects inside the isolate.
+   * Unbounded by default, because a host method is your own code and may
+   * legitimately take longer than `timeout`, which is paused while it runs.
+   * Set it when the host can hang, so the call fails instead of the run.
+   */
+  hostCallTimeout?: number
   /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
    * and cached, and each call only fills the slot, so calls that differ only in

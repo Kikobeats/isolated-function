@@ -2,6 +2,7 @@
 
 const UNKNOWN_METHOD = 'the host does not expose this method'
 const TOO_MANY_CALLS = 'the host call budget for this run is exhausted'
+const UNANSWERED_CALL = 'the host did not answer in time'
 
 const DEFAULT_MAX_CALLS = 32
 
@@ -39,7 +40,24 @@ const describe = value => {
  */
 const absorbSendError = () => {}
 
-const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
+/**
+ * A pending call holds the wall clock open, so a host that never answers would
+ * leave the run with no bound at all. The call is bounded instead of the run:
+ * the snippet gets an error it can handle, and the clock starts again.
+ */
+const answeredWithin = (promise, ms) => {
+  if (!Number.isFinite(ms)) return promise
+  let timer
+  return Promise.race([
+    promise,
+    new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new Error(UNANSWERED_CALL)), ms)
+      timer.unref()
+    })
+  ]).finally(() => clearTimeout(timer))
+}
+
+const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTimeout } = {}) => {
   const resolved = new Map()
   /**
    * Fixed when the run starts. A method added on `host` later is not reachable.
@@ -79,7 +97,17 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
     if (seen !== undefined) return seen
     if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
 
-    const pending = Promise.resolve().then(() => fn(...args))
+    const pending = Promise.resolve().then(async () => {
+      clock?.pause()
+      try {
+        return await answeredWithin(
+          Promise.resolve().then(() => fn(...args)),
+          callTimeout
+        )
+      } finally {
+        clock?.resume()
+      }
+    })
     resolved.set(key, pending)
     return pending
   }
@@ -100,4 +128,11 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
   })
 }
 
-module.exports = { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE, DEFAULT_MAX_CALLS }
+module.exports = {
+  attach,
+  UNKNOWN_METHOD,
+  TOO_MANY_CALLS,
+  UNANSWERED_CALL,
+  INDESCRIBABLE,
+  DEFAULT_MAX_CALLS
+}

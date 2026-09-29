@@ -47,9 +47,75 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
+const createWallClock = (ms, onFire) => {
+  let remaining = ms
+  let started = Date.now()
+  let depth = 0
+  let timer
+  let stopped = false
+
+  const clearTimer = () => {
+    if (timer) clearTimeout(timer)
+    timer = undefined
+  }
+
+  const stop = () => {
+    stopped = true
+    clearTimer()
+  }
+
+  const arm = () => {
+    if (stopped || depth > 0) return
+    const left = remaining - (Date.now() - started)
+    if (left <= 0) {
+      stop()
+      onFire()
+      return
+    }
+    clearTimer()
+    timer = setTimeout(() => {
+      timer = undefined
+      if (stopped) return
+      stop()
+      onFire()
+    }, left)
+    timer.unref()
+  }
+
+  arm()
+  return {
+    pause () {
+      if (stopped) return
+      if (depth === 0) {
+        remaining -= Date.now() - started
+        clearTimer()
+      }
+      depth++
+    },
+    resume () {
+      if (stopped || depth === 0) return
+      depth--
+      if (depth === 0) {
+        started = Date.now()
+        arm()
+      }
+    },
+    stop
+  }
+}
+
+const kill = subprocess => {
+  try {
+    subprocess.kill('SIGKILL')
+  } catch (error) {
+    if (error.code !== 'ESRCH') throw error
+  }
+}
+
 const spawn = ({ env, timeout, hasHost }) => {
-  const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
+  const spawnOpts = { env, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
+  else if (Number.isFinite(timeout)) spawnOpts.timeout = timeout
   if (Number.isFinite(timeout)) {
     const seconds = Math.ceil(timeout / 1000)
     return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-'], spawnOpts)
@@ -96,7 +162,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
       esbuild: callEsbuild,
       slot,
       host,
-      maxHostCalls
+      maxHostCalls,
+      hostCallTimeout
     } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
@@ -108,6 +175,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
     }
     if (maxHostCalls !== undefined && (!Number.isInteger(maxHostCalls) || maxHostCalls < 0)) {
       throw new TypeError('Expected `maxHostCalls` to be a finite non-negative integer')
+    }
+    if (hostCallTimeout !== undefined && !(hostCallTimeout > 0)) {
+      throw new TypeError('Expected `hostCallTimeout` to be a positive number')
     }
     const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
@@ -124,15 +194,29 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
         const prelude = `globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()
+        const hasHost = hostMethods !== undefined
         const subprocess = spawn({
           env: {
             PATH: process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
-          hasHost: hostMethods !== undefined
+          hasHost
         })
-        if (hostMethods !== undefined) attachHost(subprocess, host, { maxCalls: maxHostCalls })
+        // A host call runs in this process while the child waits on the reply.
+        // That wait is outside the wall clock; `ulimit -t` still caps its CPU.
+        const clock =
+          hasHost && Number.isFinite(timeout)
+            ? createWallClock(timeout, () => kill(subprocess))
+            : undefined
+        if (clock) subprocess.on('close', () => clock.stop())
+        if (hasHost) {
+          attachHost(subprocess, host, {
+            maxCalls: maxHostCalls,
+            clock,
+            callTimeout: hostCallTimeout
+          })
+        }
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

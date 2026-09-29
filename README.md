@@ -477,6 +477,30 @@ Default: `32`
 
 Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count. Arguments that cannot be serialized are rejected the same way and do not reach the host. A value that is not a finite non-negative integer throws when the function is created.
 
+#### hostCallTimeout
+
+Type: `number`<br>
+Default: `Infinity`
+
+How long a single host call may take before it rejects inside the isolate.
+
+Time awaiting a host call is excluded from [`timeout`](#timeout), since a host method is your own code and may legitimately take longer than the code it serves. That also means a host method which never settles leaves the run with no bound at all. Set this where the host can hang, so the call fails and the code carries on instead of the run stalling:
+
+```js
+const fn = isolatedFunction(
+  async () => {
+    try {
+      return await globalThis.__isolated_host('content')
+    } catch (error) {
+      return `could not read the page: ${error.message}`
+    }
+  },
+  { host: { content: () => fetchThatMightHang(url) }, hostCallTimeout: 20000 }
+)
+```
+
+The host method itself keeps running; only the call the code awaits rejects. A value that is not a positive number throws when the function is created.
+
 #### slot
 
 Type: `string`
