@@ -64,6 +64,8 @@ const source = methods => `
              Linux it looks like the snippet kept running. */
           probes++
           onNextTurn(() => {
+            /* This check's own Immediate is already off the list. What remains
+               of the probe count is the sibling checks still scheduled. */
             probes--
             if (closed || !pending.has(id)) return
             if (!snippetIsRunning()) return

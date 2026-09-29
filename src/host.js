@@ -102,10 +102,17 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
    * whether it is parked. `release` puts that time back when the snippet kept
    * running.
    */
+  const forget = invocation => {
+    for (const [trackedId, tracked] of byId) {
+      if (tracked === invocation) byId.delete(trackedId)
+    }
+  }
+
   const release = id => {
     const invocation = byId.get(id)
     if (invocation === undefined || invocation.settled || invocation.released) return
     invocation.released = true
+    forget(invocation)
     if (invocation.held) clock?.resume()
   }
 
@@ -119,7 +126,9 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
 
     const seen = resolved.get(key)
     if (seen !== undefined) {
-      byId.set(id, seen)
+      /* A settled or released call ignores further signals, so its repeats
+         must not accumulate ids for the rest of the run. */
+      if (!seen.settled && !seen.released) byId.set(id, seen)
       return seen.promise
     }
     if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
@@ -136,6 +145,7 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
         )
       } finally {
         invocation.settled = true
+        forget(invocation)
         if (!invocation.released) clock?.resume()
       }
     })
