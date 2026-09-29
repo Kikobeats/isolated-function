@@ -10,7 +10,7 @@ const source = methods => `
       const request = process.send.bind(process)
       const disconnect = process.disconnect.bind(process)
       const activeResources = process.getActiveResourcesInfo.bind(process)
-      const onNextTurn = queueMicrotask.bind(globalThis)
+      const onNextTurn = setImmediate.bind(globalThis)
       const countResources = () => {
         const counts = Object.create(null)
         for (const type of activeResources()) counts[type] = (counts[type] ?? 0) + 1
@@ -55,9 +55,8 @@ const source = methods => `
           const id = ++lastId
           pending.set(id, { resolve, reject })
           request({ id, method, args })
-          /* Pause covers this call only while the isolate is parked on the reply.
-             A new timer or socket means the snippet kept running, so tell the
-             parent to put that time back on the wall clock. */
+          /* After the send flushes. A microtask still sees that write, and on
+             Linux it looks like the snippet kept running. */
           onNextTurn(() => {
             if (closed || !pending.has(id)) return
             if (!snippetIsRunning()) return
