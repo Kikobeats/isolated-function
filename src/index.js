@@ -48,8 +48,9 @@ const flags = ({ memory, permissions }) => {
 }
 
 const createWallClock = (ms, onFire) => {
+  const now = () => performance.now()
   let remaining = ms
-  let started = Date.now()
+  let started = now()
   let depth = 0
   let timer
   let stopped = false
@@ -66,7 +67,7 @@ const createWallClock = (ms, onFire) => {
 
   const arm = () => {
     if (stopped || depth > 0) return
-    const left = remaining - (Date.now() - started)
+    const left = remaining - (now() - started)
     if (left <= 0) {
       stop()
       onFire()
@@ -87,7 +88,7 @@ const createWallClock = (ms, onFire) => {
     pause () {
       if (stopped) return
       if (depth === 0) {
-        remaining -= Date.now() - started
+        remaining -= now() - started
         clearTimer()
       }
       depth++
@@ -96,7 +97,7 @@ const createWallClock = (ms, onFire) => {
       if (stopped || depth === 0) return
       depth--
       if (depth === 0) {
-        started = Date.now()
+        started = now()
         arm()
       }
     },
@@ -176,7 +177,10 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
     if (maxHostCalls !== undefined && (!Number.isInteger(maxHostCalls) || maxHostCalls < 0)) {
       throw new TypeError('Expected `maxHostCalls` to be a finite non-negative integer')
     }
-    if (hostCallTimeout !== undefined && !(hostCallTimeout > 0)) {
+    if (
+      hostCallTimeout !== undefined &&
+      (typeof hostCallTimeout !== 'number' || !(hostCallTimeout > 0))
+    ) {
       throw new TypeError('Expected `hostCallTimeout` to be a positive number')
     }
     const { permissions = [] } = allow
@@ -203,8 +207,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
           timeout,
           hasHost
         })
-        // A host call runs in this process while the child waits on the reply.
-        // That wait is outside the wall clock; `ulimit -t` still caps its CPU.
+        // Time the child spends parked on a host reply is outside the wall clock.
+        // `ulimit -t` still caps its CPU, and a call it does not await keeps the clock running.
         const clock =
           hasHost && Number.isFinite(timeout)
             ? createWallClock(timeout, () => kill(subprocess))

@@ -9,6 +9,8 @@ const source = methods => `
     const ${CLOSE_HOST} = (() => {
       const request = process.send.bind(process)
       const disconnect = process.disconnect.bind(process)
+      const activeResources = process.getActiveResourcesInfo.bind(process)
+      const onNextTurn = queueMicrotask.bind(globalThis)
       const pending = new Map()
       let lastId = 0
       let closed = false
@@ -36,6 +38,14 @@ const source = methods => `
           const id = ++lastId
           pending.set(id, { resolve, reject })
           request({ id, method, args })
+          /* Pause covers this call only while the isolate is parked on the reply.
+             A timer or socket means the snippet kept running, so tell the parent
+             to put that time back on the wall clock. */
+          onNextTurn(() => {
+            if (closed || !pending.has(id)) return
+            if (activeResources().every(type => type === 'PipeWrap')) return
+            request({ id, running: true })
+          })
         })
         /* A call the snippet starts but never awaits must not take the run down
            with an unhandled rejection; awaiting it still surfaces the error. */

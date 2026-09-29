@@ -434,13 +434,32 @@ test('a host that never answers is bounded by hostCallTimeout', async t => {
   t.is(value, UNANSWERED_CALL)
 })
 
-test('a slow host outlives the execution timeout when nothing bounds it', async t => {
-  const { value } = await run(
-    async () => globalThis.__isolated_host('slow'),
-    { slow: () => new Promise(resolve => setTimeout(() => resolve('answered'), 900)) },
-    { timeout: 500 }
+test('a host call the snippet does not await leaves the timeout running', async t => {
+  const error = await t.throwsAsync(
+    isolatedFunction(
+      async () => {
+        globalThis.__isolated_host('stuck')
+        await new Promise(resolve => setTimeout(resolve, 800))
+        return 'finished late'
+      },
+      { host: { stuck: () => new Promise(() => {}) }, timeout: 300 }
+    )()
   )
-  t.is(value, 'answered')
+  t.is(error.message, 'Execution timed out')
+})
+
+test('the wall clock resumes after a host call', async t => {
+  const error = await t.throwsAsync(
+    isolatedFunction(
+      async () => {
+        await globalThis.__isolated_host('quick')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return 'too late'
+      },
+      { host: { quick: async () => 'ok' }, timeout: 400 }
+    )()
+  )
+  t.is(error.message, 'Execution timed out')
 })
 
 test('a bounded call leaves the run able to continue', async t => {
@@ -459,10 +478,9 @@ test('a bounded call leaves the run able to continue', async t => {
 })
 
 test('hostCallTimeout must be a positive number', t => {
-  t.throws(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout: 0 }), {
-    message: 'Expected `hostCallTimeout` to be a positive number'
-  })
-  t.throws(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout: -1 }), {
-    message: 'Expected `hostCallTimeout` to be a positive number'
-  })
+  const message = 'Expected `hostCallTimeout` to be a positive number'
+  for (const hostCallTimeout of [0, -1, NaN, '400', true]) {
+    t.throws(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout }), { message })
+  }
+  t.notThrows(() => isolatedFunction(async () => 1, { host: HOST, hostCallTimeout: Infinity }))
 })

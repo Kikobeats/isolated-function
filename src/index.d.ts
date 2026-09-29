@@ -140,7 +140,7 @@ export interface IsolatedFunctionOptions {
   /**
    * How long a single host call may take before it rejects inside the isolate.
    * Unbounded by default, because a host method is your own code and may
-   * legitimately take longer than `timeout`, which is paused while it runs.
+   * legitimately take longer than `timeout`, which is paused while the snippet waits on it.
    * Set it when the host can hang, so the call fails instead of the run.
    */
   hostCallTimeout?: number

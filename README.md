@@ -484,7 +484,7 @@ Default: `Infinity`
 
 How long a single host call may take before it rejects inside the isolate.
 
-Time awaiting a host call is excluded from [`timeout`](#timeout), since a host method is your own code and may legitimately take longer than the code it serves. That also means a host method which never settles leaves the run with no bound at all. Set this where the host can hang, so the call fails and the code carries on instead of the run stalling:
+Time the snippet spends parked on a host call is excluded from [`timeout`](#timeout). A call it does not await leaves the timeout running, so other work in the snippet still counts. A host method is your own code and may legitimately take longer than the snippet's budget. One that never settles, while the snippet is waiting on it, leaves the run with no bound at all. Set this where the host can hang, so the call fails and the code carries on instead of the run stalling:
 
 ```js
 const fn = isolatedFunction(
@@ -536,7 +536,7 @@ A syntax error in the slot code rejects with a `SyntaxError`, as a full build do
 Type: `number`<br>
 Default: `Infinity`
 
-Timeout after a specified amount of time, in milliseconds. Enforces both a wall-clock limit (via `SIGKILL`) and a CPU time limit (via `RLIMIT_CPU`/`SIGXCPU`).
+Timeout after a specified amount of time, in milliseconds. Enforces both a wall-clock limit (via `SIGKILL`) and a CPU time limit (via `RLIMIT_CPU`/`SIGXCPU`). Time the snippet spends parked on a host call is excluded from the wall clock.
 
 #### allow
 

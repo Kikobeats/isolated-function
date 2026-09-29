@@ -19,6 +19,17 @@ const isWellFormed = message =>
   (message.args === undefined || Array.isArray(message.args))
 
 /**
+ * The isolate kept working after this call. Releasing the pause can only give
+ * time back: a message cannot stop the clock on its own.
+ */
+const isStillRunning = message =>
+  message !== null &&
+  typeof message === 'object' &&
+  Number.isInteger(message.id) &&
+  message.running === true &&
+  message.method === undefined
+
+/**
  * A rejection value is whatever the host method threw, which need not be an
  * Error, and the reason travels as JSON regardless.
  */
@@ -59,6 +70,7 @@ const answeredWithin = (promise, ms) => {
 
 const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTimeout } = {}) => {
   const resolved = new Map()
+  const byId = new Map()
   /**
    * Fixed when the run starts. A method added on `host` later is not reachable.
    * Bound to `host` so a method call still sees that object as `this`.
@@ -85,7 +97,19 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
     }
   }
 
-  const resolve = (fn, method, args) => {
+  /**
+   * The clock stops when the call starts, which is before the child can say
+   * whether it is parked. `release` puts that time back when the snippet kept
+   * running.
+   */
+  const release = id => {
+    const invocation = byId.get(id)
+    if (invocation === undefined || invocation.settled || invocation.released) return
+    invocation.released = true
+    if (invocation.held) clock?.resume()
+  }
+
+  const resolve = (id, fn, method, args) => {
     let key
     try {
       key = `${method}:${JSON.stringify(args)}`
@@ -94,32 +118,41 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
     }
 
     const seen = resolved.get(key)
-    if (seen !== undefined) return seen
+    if (seen !== undefined) {
+      byId.set(id, seen)
+      return seen.promise
+    }
     if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
 
-    const pending = Promise.resolve().then(async () => {
+    const invocation = { held: false, released: false, settled: false }
+    invocation.promise = Promise.resolve().then(async () => {
       clock?.pause()
+      invocation.held = true
+      if (invocation.released) clock?.resume()
       try {
         return await answeredWithin(
           Promise.resolve().then(() => fn(...args)),
           callTimeout
         )
       } finally {
-        clock?.resume()
+        invocation.settled = true
+        if (!invocation.released) clock?.resume()
       }
     })
-    resolved.set(key, pending)
-    return pending
+    resolved.set(key, invocation)
+    byId.set(id, invocation)
+    return invocation.promise
   }
 
   subprocess.on('message', message => {
+    if (isStillRunning(message)) return release(message.id)
     if (!isWellFormed(message)) return
     const { id, method, args = [] } = message
 
     const fn = exposed.get(method)
     if (fn === undefined) return answer(id, { failed: true, reason: UNKNOWN_METHOD })
 
-    resolve(fn, method, args)
+    resolve(id, fn, method, args)
       .then(
         value => answer(id, { value }),
         error => answer(id, { failed: true, reason: describe(error) })
