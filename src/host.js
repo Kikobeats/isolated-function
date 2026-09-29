@@ -102,7 +102,8 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
    * whether it is parked. `release` puts that time back when the snippet kept
    * running.
    */
-  const release = id => {
+  const release = (id, resources) => {
+    if (resources !== undefined) process.stderr.write(`host-running ${JSON.stringify(resources)}\n`)
     const invocation = byId.get(id)
     if (invocation === undefined || invocation.settled || invocation.released) return
     invocation.released = true
@@ -145,7 +146,7 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS, clock, callTim
   }
 
   subprocess.on('message', message => {
-    if (isStillRunning(message)) return release(message.id)
+    if (isStillRunning(message)) return release(message.id, message.resources)
     if (!isWellFormed(message)) return
     const { id, method, args = [] } = message
 
