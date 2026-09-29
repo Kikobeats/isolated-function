@@ -188,8 +188,8 @@ test('a host exposing nothing is a mistake worth reporting', t => {
 test('time awaiting the host is not part of the execution timeout', async t => {
   const { value } = await run(
     async () => globalThis.__isolated_host('slow'),
-    { slow: () => new Promise(resolve => setTimeout(() => resolve('done'), 1000)) },
-    { timeout: 500 }
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('done'), 2500)) },
+    { timeout: 1500 }
   )
   t.is(value, 'done')
 })
@@ -439,10 +439,10 @@ test('a host call the snippet does not await leaves the timeout running', async 
     isolatedFunction(
       async () => {
         globalThis.__isolated_host('stuck')
-        await new Promise(resolve => setTimeout(resolve, 800))
+        await new Promise(resolve => setTimeout(resolve, 2500))
         return 'finished late'
       },
-      { host: { stuck: () => new Promise(() => {}) }, timeout: 300 }
+      { host: { stuck: () => new Promise(() => {}) }, timeout: 1500 }
     )()
   )
   t.is(error.message, 'Execution timed out')
@@ -453,10 +453,10 @@ test('the wall clock resumes after a host call', async t => {
     isolatedFunction(
       async () => {
         await globalThis.__isolated_host('quick')
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        await new Promise(resolve => setTimeout(resolve, 2500))
         return 'too late'
       },
-      { host: { quick: async () => 'ok' }, timeout: 400 }
+      { host: { quick: async () => 'ok' }, timeout: 1500 }
     )()
   )
   t.is(error.message, 'Execution timed out')

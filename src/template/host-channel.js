@@ -60,7 +60,7 @@ const source = methods => `
           onNextTurn(() => {
             if (closed || !pending.has(id)) return
             if (!snippetIsRunning()) return
-            request({ id, running: true, resources: activeResources() })
+            request({ id, running: true })
           })
         })
         /* A call the snippet starts but never awaits must not take the run down
