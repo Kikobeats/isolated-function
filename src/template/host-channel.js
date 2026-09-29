@@ -41,9 +41,14 @@ const source = methods => `
          snippet work. The set depends on the platform, so compare counts
          rather than assuming a pipe. */
       const baseline = countResources()
+      let probes = 0
       const snippetIsRunning = () => {
         const counts = countResources()
+        /* Each in-flight check is itself an Immediate. Those are not the snippet. */
+        const immediates = Math.max(0, (counts.Immediate ?? 0) - probes)
+        if (immediates > (baseline.Immediate ?? 0)) return true
         for (const type in counts) {
+          if (type === 'Immediate') continue
           if (counts[type] > (baseline[type] ?? 0)) return true
         }
         return false
@@ -57,7 +62,9 @@ const source = methods => `
           request({ id, method, args })
           /* After the send flushes. A microtask still sees that write, and on
              Linux it looks like the snippet kept running. */
+          probes++
           onNextTurn(() => {
+            probes--
             if (closed || !pending.has(id)) return
             if (!snippetIsRunning()) return
             request({ id, running: true })

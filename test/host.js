@@ -434,6 +434,19 @@ test('a host that never answers is bounded by hostCallTimeout', async t => {
   t.is(value, UNANSWERED_CALL)
 })
 
+test('overlapping repeats of one call stay outside the timeout', async t => {
+  const { value } = await run(
+    async () => {
+      const first = globalThis.__isolated_host('slow')
+      const second = globalThis.__isolated_host('slow')
+      return (await first) + (await second)
+    },
+    { slow: () => new Promise(resolve => setTimeout(() => resolve('ok'), 2500)) },
+    { timeout: 1500 }
+  )
+  t.is(value, 'okok')
+})
+
 test('a host call the snippet does not await leaves the timeout running', async t => {
   const error = await t.throwsAsync(
     isolatedFunction(
