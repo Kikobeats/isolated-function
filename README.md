@@ -477,6 +477,24 @@ Default: `32`
 
 Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count. Arguments that cannot be serialized are rejected the same way and do not reach the host. A value that is not a finite non-negative integer throws when the function is created.
 
+#### Naming your own phases
+
+`profiling.phases` reports where a run spent its time, but `run` is a single number covering everything the code did. When that number is the one you are trying to explain, the code can name spans inside it:
+
+```js
+const fn = isolatedFunction(async () => {
+  const browser = await globalThis.__isolated_time('connect', () => connectSomewhere())
+  return browser.title()
+})
+
+const { profiling } = await fn()
+profiling.phases //=> { install: 0, build: 2, connect: 812, spawn: 31, run: 848, total: 1204 }
+```
+
+`__isolated_time(name, thunk)` records how long the thunk took, returns its value, and records the span even when it throws. `__isolated_phase(name, ms)` records a duration you measured yourself. Repeating a name adds to it rather than replacing it, so a span inside a loop totals.
+
+Named spans sit inside `run` and are merged under it. A program cannot overwrite `install`, `build`, `spawn`, `run` or `total`; those are the runner's own and are applied last. A program that names nothing reports exactly the phases it did before.
+
 #### slot
 
 Type: `string`

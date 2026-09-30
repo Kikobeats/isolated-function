@@ -138,11 +138,12 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
         const { stdout } = await subprocess
         const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-        const { run, ...rest } = profiling
+        const { run, phases: programPhases, ...rest } = profiling
         const result = {
           ...rest,
           size: Buffer.byteLength(compiled.content),
           phases: {
+            ...programPhases,
             ...compiled.phases,
             spawn: spawnMs - run,
             run,

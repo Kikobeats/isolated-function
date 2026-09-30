@@ -12,6 +12,12 @@ export interface Phases {
   run: number
   /** End-to-end wall-clock time in milliseconds */
   total: number
+  /**
+   * Spans the program named for itself, via `globalThis.__isolated_time` or
+   * `globalThis.__isolated_phase`. They sit inside `run` and cannot displace
+   * the phases above.
+   */
+  [name: string]: number
 }
 
 export interface Memory {
