@@ -7,7 +7,11 @@ module.exports = (snippet, { hostMethods } = {}) => `;(send => {
   process.stdout.write = function () {}
   const baseline = process.memoryUsage().rss
   const memory = () => { const m = process.memoryUsage(); return {total: m.rss, used: Math.max(0, m.rss - baseline), heap: m.heapUsed, external: m.external} }
-  const respond = (isFulfilled, value, run, logs = {}) => { const {user, system} = process.cpuUsage(); send(JSON.stringify({isFulfilled, logging: logs, value, profiling: {cpu: (user + system) / 1000, memory: memory(), run}})) }
+  const phases = Object.create(null)
+  globalThis.__isolated_phase = (name, ms) => { phases[name] = (phases[name] || 0) + ms }
+  globalThis.__isolated_time = async (name, thunk) => { const at = performance.now(); try { return await thunk() } finally { globalThis.__isolated_phase(name, performance.now() - at) } }
+  const reportedPhases = () => Object.keys(phases).length ? phases : undefined
+  const respond = (isFulfilled, value, run, logs = {}) => { const {user, system} = process.cpuUsage(); send(JSON.stringify({isFulfilled, logging: logs, value, profiling: {cpu: (user + system) / 1000, memory: memory(), run, phases: reportedPhases()}})) }
 
   return Promise.resolve().then(async () => {
     const args = JSON.parse(globalThis.__isolated_args)
