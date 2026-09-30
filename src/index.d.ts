@@ -9,17 +9,20 @@ export interface Phases {
   /** Process creation + Node.js boot + template setup in milliseconds */
   spawn: number
   /**
-   * Time inside the program that no span claimed, in milliseconds. With no
-   * spans this is the whole execution; with them it is what is left after
-   * `install`, `build`, `spawn` and the named spans, so the parts add up.
+   * Time inside the program that no span was open for, in milliseconds. It is
+   * the execution minus the union of the intervals `__isolated_time` covered,
+   * so overlapping spans are counted once between them and a nested one is not
+   * counted again. Named durations can therefore overlap each other, and
+   * summing every reported phase may exceed `total`.
    */
   run: number
   /** End-to-end wall-clock time in milliseconds */
   total: number
   /**
    * Spans the program named for itself. `__isolated_time` wraps elapsed time
-   * and is taken out of `run`; `__isolated_phase` records a number the program
-   * asserts and is not. Neither can displace the phases above.
+   * and reduces `run`; `__isolated_phase` records a number the program asserts
+   * and does not. A name matching a phase above is ignored, so neither can
+   * displace one.
    */
   [name: string]: number
 }

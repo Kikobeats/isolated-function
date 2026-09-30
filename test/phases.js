@@ -119,3 +119,60 @@ test('spawn is unaffected by what the program names', async t => {
 
   t.true(Math.abs(plain.profiling.phases.spawn - named.profiling.phases.spawn) < 120)
 })
+
+test('overlapping spans account for the window they share', async t => {
+  const { profiling } = await run(
+    `async () => {
+      const d = ms => new Promise(r => setTimeout(r, ms))
+      await Promise.all([
+        globalThis.__isolated_time('a', () => d(50)),
+        globalThis.__isolated_time('b', () => d(200))
+      ])
+      return 1
+    }`
+  )
+  const { a, b, run: remainder } = profiling.phases
+
+  t.true(a >= 40 && a < 120, `a was ${a}`)
+  t.true(b >= 180, `b was ${b}`)
+  t.true(remainder < 100, `the longer span still covered the window, run was ${remainder}`)
+})
+
+test('the order two overlapping spans start in does not change run', async t => {
+  const shape = first => `async () => {
+    const d = ms => new Promise(r => setTimeout(r, ms))
+    await Promise.all([
+      globalThis.__isolated_time('${first}', () => d(${first === 'long' ? 200 : 50})),
+      globalThis.__isolated_time('${first === 'long' ? 'short' : 'long'}', () => d(${
+    first === 'long' ? 50 : 200
+  }))
+    ])
+    return 1
+  }`
+
+  const longFirst = await run(shape('long'))
+  const shortFirst = await run(shape('short'))
+
+  t.true(longFirst.profiling.phases.run < 100)
+  t.true(shortFirst.profiling.phases.run < 100)
+})
+
+test('a span named after a runner phase is ignored rather than hidden', async t => {
+  const { profiling } = await run(
+    `async () => {
+      await globalThis.__isolated_time('run', () => new Promise(r => setTimeout(r, 150)))
+      return 1
+    }`
+  )
+  t.true(
+    profiling.phases.run >= 140,
+    `run was ${profiling.phases.run}, the span must not be subtracted`
+  )
+})
+
+test('a span named after a runner phase still returns its value', async t => {
+  const { value } = await run(
+    "async () => globalThis.__isolated_time('total', async () => 'answer')"
+  )
+  t.is(value, 'answer')
+})

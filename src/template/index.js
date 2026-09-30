@@ -8,18 +8,22 @@ module.exports = (snippet, { hostMethods } = {}) => `;(send => {
   const baseline = process.memoryUsage().rss
   const memory = () => { const m = process.memoryUsage(); return {total: m.rss, used: Math.max(0, m.rss - baseline), heap: m.heapUsed, external: m.external} }
   const phases = Object.create(null)
+  const OWNED = ['install', 'build', 'spawn', 'run', 'total']
   let accounted = 0
   let depth = 0
-  globalThis.__isolated_phase = (name, ms) => { phases[name] = (phases[name] || 0) + ms }
+  let busySince = 0
+  globalThis.__isolated_phase = (name, ms) => { if (!OWNED.includes(name)) phases[name] = (phases[name] || 0) + ms }
   globalThis.__isolated_time = async (name, thunk) => {
+    if (OWNED.includes(name)) return thunk()
     const at = performance.now()
-    const outermost = depth === 0
+    if (depth === 0) busySince = at
     depth++
     try { return await thunk() } finally {
       depth--
-      const ms = performance.now() - at
-      globalThis.__isolated_phase(name, ms)
-      if (outermost) accounted += ms
+      globalThis.__isolated_phase(name, performance.now() - at)
+      /* The union of the intervals a span was open, so overlapping siblings
+         count once between them and a nested one is not counted again. */
+      if (depth === 0) accounted += performance.now() - busySince
     }
   }
   const reportedPhases = () => Object.keys(phases).length ? phases : undefined
