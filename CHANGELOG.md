@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.11 (2026-09-30)
+
+
+### Features
+
+* let a program name spans inside its own run ([#85](https://github.com/Kikobeats/isolated-function/issues/85)) ([445aa21](https://github.com/Kikobeats/isolated-function/commit/445aa21646deaea41dcbe16c42974b0c13cfa206))
+
 ### 0.2.10 (2026-09-28)
 
 
