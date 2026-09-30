@@ -143,8 +143,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
           ...rest,
           size: Buffer.byteLength(compiled.content),
           phases: {
-            ...compiled.phases,
             ...programPhases,
+            ...compiled.phases,
             spawn: spawnMs - run,
             run,
             total: total()

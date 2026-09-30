@@ -50,14 +50,12 @@ test('the same name accumulates rather than replacing', async t => {
   t.is(profiling.phases.resolve, 25)
 })
 
-test('a program cannot overwrite the phases the runner owns', async t => {
-  const { profiling } = await run(
-    `async () => {
-      globalThis.__isolated_phase('run', 999999)
-      globalThis.__isolated_phase('total', 999999)
-      return 1
-    }`
-  )
-  t.true(profiling.phases.run < 999999)
-  t.true(profiling.phases.total < 999999)
+test('a program cannot overwrite any phase the runner owns', async t => {
+  const OWNED = ['install', 'build', 'spawn', 'run', 'total']
+  const claims = OWNED.map(name => `globalThis.__isolated_phase('${name}', 999999)`).join('\n')
+  const { profiling } = await run(`async () => {\n${claims}\nreturn 1\n}`)
+
+  for (const name of OWNED) {
+    t.true(profiling.phases[name] < 999999, name)
+  }
 })
