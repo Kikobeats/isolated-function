@@ -8,14 +8,18 @@ export interface Phases {
   build: number
   /** Process creation + Node.js boot + template setup in milliseconds */
   spawn: number
-  /** User function execution time in milliseconds */
+  /**
+   * Time inside the program that no span claimed, in milliseconds. With no
+   * spans this is the whole execution; with them it is what is left after
+   * `install`, `build`, `spawn` and the named spans, so the parts add up.
+   */
   run: number
   /** End-to-end wall-clock time in milliseconds */
   total: number
   /**
-   * Spans the program named for itself, via `globalThis.__isolated_time` or
-   * `globalThis.__isolated_phase`. They sit inside `run` and cannot displace
-   * the phases above.
+   * Spans the program named for itself. `__isolated_time` wraps elapsed time
+   * and is taken out of `run`; `__isolated_phase` records a number the program
+   * asserts and is not. Neither can displace the phases above.
    */
   [name: string]: number
 }

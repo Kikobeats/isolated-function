@@ -493,7 +493,11 @@ profiling.phases //=> { install: 0, build: 2, connect: 812, spawn: 31, run: 848,
 
 `__isolated_time(name, thunk)` records how long the thunk took, returns its value, and records the span even when it throws. `__isolated_phase(name, ms)` records a duration you measured yourself. Repeating a name adds to it rather than replacing it, so a span inside a loop totals.
 
-Named spans sit inside `run` and are merged under it. A program cannot overwrite `install`, `build`, `spawn`, `run` or `total`; those are the runner's own and are applied last. A program that names nothing reports exactly the phases it did before.
+A span recorded with `__isolated_time` is taken out of `run`, so `install`, `build`, `spawn`, your spans and `run` add up rather than double-counting: `run` becomes the time nothing claimed. Only the outermost span counts, so nesting one inside another does not subtract it twice. `__isolated_phase` records a number you measured some other way and leaves `run` alone, since it did not wrap any elapsed time.
+
+A program cannot overwrite `install`, `build`, `spawn`, `run` or `total`; those are the runner's own and are applied last. A program that names nothing reports exactly the phases it did before.
+
+Time the host spends waiting, such as on a build another call is performing, belongs to no phase, so the parts can add up to less than `total`.
 
 #### slot
 
