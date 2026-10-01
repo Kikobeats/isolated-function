@@ -12,7 +12,7 @@ module.exports = (snippet, { hostMethods } = {}) => `;(send => {
   let accounted = 0
   let depth = 0
   let busySince = 0
-  globalThis.__isolated_phase = (name, ms) => { if (!OWNED.includes(name)) phases[name] = (phases[name] || 0) + ms }
+  const record = (name, ms) => { if (!OWNED.includes(name)) phases[name] = (phases[name] || 0) + ms }
   globalThis.__isolated_time = async (name, thunk) => {
     if (OWNED.includes(name)) return thunk()
     const at = performance.now()
@@ -20,7 +20,7 @@ module.exports = (snippet, { hostMethods } = {}) => `;(send => {
     depth++
     try { return await thunk() } finally {
       depth--
-      globalThis.__isolated_phase(name, performance.now() - at)
+      record(name, performance.now() - at)
       /* The union of the intervals a span was open, so overlapping siblings
          count once between them and a nested one is not counted again. */
       if (depth === 0) accounted += performance.now() - busySince

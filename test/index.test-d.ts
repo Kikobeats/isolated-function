@@ -165,13 +165,11 @@ const slotted = isolatedFunction(`async (x) => (${isolatedFunction.SLOT})(x)`, {
 expectType<IsolatedFn<unknown>>(slotted)
 expectType<string>(createIsolatedFunction.SLOT)
 expectType<number>(isolatedFunction.shells.bytes)
-createIsolatedFunction({ shellCacheBytes: 16 * 1024 * 1024 })
 
 declare const hostCall: HostCall
 
 expectType<IsolatedFn<string>>(
   isolatedFunction(async () => (await hostCall('content')) as string, {
-    host: { content: async () => '<html></html>' },
-    maxHostCalls: 4
+    host: { content: async () => '<html></html>' }
   })
 )

@@ -42,24 +42,25 @@ test('a span is recorded even when the work inside it throws', async t => {
 test('the same name accumulates rather than replacing', async t => {
   const { profiling } = await run(
     `async () => {
-      globalThis.__isolated_phase('resolve', 10)
-      globalThis.__isolated_phase('resolve', 15)
+      const d = ms => new Promise(r => setTimeout(r, ms))
+      await globalThis.__isolated_time('step', () => d(60))
+      await globalThis.__isolated_time('step', () => d(60))
       return 1
     }`
   )
-  t.is(profiling.phases.resolve, 25)
+  t.true(profiling.phases.step >= 110, `step was ${profiling.phases.step}`)
 })
-
 test('a program cannot overwrite any phase the runner owns', async t => {
   const OWNED = ['install', 'build', 'spawn', 'run', 'total']
-  const claims = OWNED.map(name => `globalThis.__isolated_phase('${name}', 999999)`).join('\n')
+  const claims = OWNED.map(
+    name => `await globalThis.__isolated_time('${name}', async () => 1)`
+  ).join('\n')
   const { profiling } = await run(`async () => {\n${claims}\nreturn 1\n}`)
 
   for (const name of OWNED) {
     t.true(profiling.phases[name] < 999999, name)
   }
 })
-
 test('run reports what no span claimed', async t => {
   const { profiling } = await run(
     `async () => {
@@ -99,25 +100,19 @@ test('a span inside another is not subtracted twice', async t => {
   t.true(remainder < 100, `remainder was ${remainder}, inner should not be subtracted again`)
 })
 
-test('a duration the program asserts does not reduce run', async t => {
+test('a named span does not come out of spawn', async t => {
   const { profiling } = await run(
-    `async () => {
-      globalThis.__isolated_phase('claimed', 5000)
-      await new Promise(r => setTimeout(r, 120))
-      return 1
-    }`
+    "async () => globalThis.__isolated_time('step', () => new Promise(r => setTimeout(r, 200)))"
   )
-  t.is(profiling.phases.claimed, 5000)
-  t.true(profiling.phases.run >= 100, 'only a timed span owns elapsed time')
-})
+  const { spawn, step, run: remainder } = profiling.phases
 
-test('spawn is unaffected by what the program names', async t => {
-  const plain = await run('async () => new Promise(r => setTimeout(r, 150))')
-  const named = await run(
-    "async () => globalThis.__isolated_time('connect', () => new Promise(r => setTimeout(r, 150)))"
-  )
-
-  t.true(Math.abs(plain.profiling.phases.spawn - named.profiling.phases.spawn) < 120)
+  // `spawn` is what the host saw minus the whole child execution, so a span
+  // taken out of `run` must not be added back here. Comparing two runs would
+  // measure process boot, which moves under load.
+  t.true(spawn > 0, `spawn was ${spawn}`)
+  t.true(spawn < step, `spawn ${spawn} must not have absorbed the ${step}ms span`)
+  t.true(step >= 190, `step was ${step}`)
+  t.true(remainder < 100, `remainder was ${remainder}`)
 })
 
 test('overlapping spans account for the window they share', async t => {

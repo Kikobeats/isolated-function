@@ -19,10 +19,9 @@ export interface Phases {
   /** End-to-end wall-clock time in milliseconds */
   total: number
   /**
-   * Spans the program named for itself. `__isolated_time` wraps elapsed time
-   * and reduces `run`; `__isolated_phase` records a number the program asserts
-   * and does not. A name matching a phase above is ignored, so neither can
-   * displace one.
+   * Spans the program named for itself with `__isolated_time`, which wraps
+   * elapsed time and reduces `run`. A name matching a phase above is ignored,
+   * so a program cannot displace one.
    */
   [name: string]: number
 }
@@ -103,8 +102,6 @@ export interface CreateOptions {
   tmpdir?: string
   /** Additional directories for resolving dependencies. Dependencies found here with a matching version skip package install. */
   nodePaths?: string[]
-  /** Byte budget for cached `slot` shells, least recently used evicted first. Defaults to 32 MB. */
-  shellCacheBytes?: number
 }
 
 /**
@@ -142,11 +139,6 @@ export interface IsolatedFunctionOptions {
    * something in the child asked, never that the snippet asked.
    */
   host?: Record<string, (...args: any[]) => unknown>
-  /**
-   * Distinct host calls allowed per run, rejecting the rest. Defaults to 32.
-   * A value that is not a finite non-negative integer throws when the function is created.
-   */
-  maxHostCalls?: number
   /**
    * Code to place where the snippet contains `SLOT`. The snippet is built once
    * and cached, and each call only fills the slot, so calls that differ only in
