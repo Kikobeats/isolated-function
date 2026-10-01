@@ -138,15 +138,17 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
         const { stdout } = await subprocess
         const spawnMs = spawnElapsed()
         const { isFulfilled, value, profiling, logging } = JSON.parse(stdout)
-        const { run, phases: programPhases, ...rest } = profiling
+        const { run, accounted = 0, phases: programPhases, ...rest } = profiling
         const result = {
           ...rest,
           size: Buffer.byteLength(compiled.content),
           phases: {
             ...programPhases,
             ...compiled.phases,
+            // `spawn` is what the host saw minus everything the child did, so
+            // it needs the whole run; `run` reports only what no span claimed.
             spawn: spawnMs - run,
-            run,
+            run: Math.max(0, run - accounted),
             total: total()
           }
         }
