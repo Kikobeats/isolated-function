@@ -398,24 +398,6 @@ const isolatedFunction = require('isolated-function')({
 })
 ```
 
-#### shellCacheBytes
-
-Type: `number`<br>
-Default: `33554432` (32 MB)
-
-Byte budget for the shells built for [`slot`](#slot). The least recently used shell is evicted first; a shell larger than the whole budget is not kept.
-
-## => instance(code, [options])
-
-### code
-
-_Required_<br>
-Type: `function`
-
-The hosted function to run.
-
-### options
-
 #### memory
 
 Type: `number`<br>
@@ -470,13 +452,6 @@ Passing `host` opens an IPC channel to the child. The isolate runs untrusted cod
 
 A call the code starts but never awaits does not take the run down, and a value the channel cannot carry, such as a `BigInt`, rejects that call rather than hanging it.
 
-#### maxHostCalls
-
-Type: `number`<br>
-Default: `32`
-
-Distinct host calls allowed per run. Further calls reject inside the isolate rather than reaching the host, which bounds how much work a code can ask for. Repeats of an already resolved call do not count. Arguments that cannot be serialized are rejected the same way and do not reach the host. A value that is not a finite non-negative integer throws when the function is created.
-
 #### Naming your own phases
 
 `profiling.phases` reports where a run spent its time, but `run` is a single number covering everything the code did. When that number is the one you are trying to explain, the code can name spans inside it:
@@ -491,13 +466,11 @@ const { profiling } = await fn()
 profiling.phases //=> { install: 0, build: 2, connect: 812, spawn: 31, run: 848, total: 1204 }
 ```
 
-`__isolated_time(name, thunk)` records how long the thunk took, returns its value, and records the span even when it throws. `__isolated_phase(name, ms)` records a duration you measured yourself. Repeating a name adds to it rather than replacing it, so a span inside a loop totals.
+`__isolated_time(name, thunk)` records how long the thunk took, returns its value, and records the span even when it throws. Repeating a name adds to it rather than replacing it, so a span inside a loop totals.
 
 A span recorded with `__isolated_time` reduces `run`, so `install`, `build`, `spawn`, your spans and `run` add up rather than double-counting: `run` becomes the time no span was open for.
 
 What is subtracted is the union of the intervals a span covered, not the sum of their durations. Nesting one span inside another does not subtract it twice, and two overlapping spans are counted once between them. The consequence is that the named durations themselves can overlap, so adding all of them up can exceed `total` even though `run` is right — reconstruct the whole from `install`, `build`, `spawn` and `run`, not from every name.
-
-`__isolated_phase` records a number you measured some other way and leaves `run` alone, since it did not wrap any elapsed time.
 
 A span named `install`, `build`, `spawn`, `run` or `total` is ignored: the thunk still runs and returns its value, but nothing is recorded and `run` is untouched. Those names belong to the runner, and recording one would subtract time that is then invisible.
 

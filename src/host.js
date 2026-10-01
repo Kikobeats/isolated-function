@@ -1,9 +1,7 @@
 'use strict'
 
 const UNKNOWN_METHOD = 'the host does not expose this method'
-const TOO_MANY_CALLS = 'the host call budget for this run is exhausted'
-
-const DEFAULT_MAX_CALLS = 32
+const UNSHAREABLE_ARGS = 'the host call arguments cannot be compared'
 
 /**
  * Every inbound message is untrusted. The isolate runs third-party code and can
@@ -39,7 +37,7 @@ const describe = value => {
  */
 const absorbSendError = () => {}
 
-const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
+const attach = (subprocess, host) => {
   const resolved = new Map()
   /**
    * Fixed when the run starts. A method added on `host` later is not reachable.
@@ -67,17 +65,17 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
     }
   }
 
+  /** The same method and arguments resolve once, so asking twice costs one call. */
   const resolve = (fn, method, args) => {
     let key
     try {
       key = `${method}:${JSON.stringify(args)}`
     } catch {
-      return Promise.reject(new Error(TOO_MANY_CALLS))
+      return Promise.reject(new Error(UNSHAREABLE_ARGS))
     }
 
     const seen = resolved.get(key)
     if (seen !== undefined) return seen
-    if (resolved.size >= maxCalls) return Promise.reject(new Error(TOO_MANY_CALLS))
 
     const pending = Promise.resolve().then(() => fn(...args))
     resolved.set(key, pending)
@@ -100,4 +98,4 @@ const attach = (subprocess, host, { maxCalls = DEFAULT_MAX_CALLS } = {}) => {
   })
 }
 
-module.exports = { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE, DEFAULT_MAX_CALLS }
+module.exports = { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE }

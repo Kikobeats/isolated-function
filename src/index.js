@@ -57,8 +57,8 @@ const spawn = ({ env, timeout, hasHost }) => {
   return $('node', ['-'], spawnOpts)
 }
 
-module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
-  const shells = createShells({ maxBytes: shellCacheBytes })
+module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
+  const shells = createShells()
 
   /**
    * Builds `snippet` once with SLOT still in it, then fills the slot per call.
@@ -88,16 +88,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
 
   const isolatedFunction = (
     snippet,
-    {
-      timeout,
-      memory,
-      throwError = true,
-      allow = {},
-      esbuild: callEsbuild,
-      slot,
-      host,
-      maxHostCalls
-    } = {}
+    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     if (slot !== undefined) {
@@ -105,9 +96,6 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
       if (typeof snippet !== 'string' || snippet.split(SLOT).length !== 2) {
         throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
       }
-    }
-    if (maxHostCalls !== undefined && (!Number.isInteger(maxHostCalls) || maxHostCalls < 0)) {
-      throw new TypeError('Expected `maxHostCalls` to be a finite non-negative integer')
     }
     const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
@@ -132,7 +120,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild, shellCacheBytes } = {}) => {
           timeout,
           hasHost: hostMethods !== undefined
         })
-        if (hostMethods !== undefined) attachHost(subprocess, host, { maxCalls: maxHostCalls })
+        if (hostMethods !== undefined) attachHost(subprocess, host)
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

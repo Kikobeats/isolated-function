@@ -3,7 +3,7 @@
 const { EventEmitter } = require('events')
 const { default: test } = require('ava')
 
-const { attach, UNKNOWN_METHOD, TOO_MANY_CALLS, INDESCRIBABLE } = require('../src/host')
+const { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE } = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -112,26 +112,6 @@ test('a failure on the host surfaces inside the snippet', async t => {
     }
   )
   t.is(value, 'every proxy tier refused')
-})
-
-test('the call budget bounds how much work a snippet can ask for', async t => {
-  const { value, calls } = await run(
-    async () => {
-      const seen = []
-      for (let index = 0; index < 4; index++) {
-        try {
-          seen.push(await globalThis.__isolated_host('extract', [{ [`k${index}`]: 1 }]))
-        } catch (error) {
-          seen.push(error.message)
-        }
-      }
-      return seen[seen.length - 1]
-    },
-    HOST,
-    { maxHostCalls: 2 }
-  )
-  t.is(value, TOO_MANY_CALLS)
-  t.is(calls.length, 2)
 })
 
 test('a run without a host has no channel at all', async t => {
@@ -311,29 +291,6 @@ test('removing the host global cannot keep the channel open', async t => {
   t.is(value, 'returned')
 })
 
-test('a host call budget that is not a finite non-negative integer is refused', t => {
-  const message = 'Expected `maxHostCalls` to be a finite non-negative integer'
-  for (const maxHostCalls of [NaN, Infinity, -1, 1.5]) {
-    t.throws(() => isolatedFunction(async () => 1, { host: HOST, maxHostCalls }), { message })
-  }
-})
-
-test('a host call budget of zero reaches nothing', async t => {
-  const { value, calls } = await run(
-    async () => {
-      try {
-        return await globalThis.__isolated_host('content')
-      } catch (error) {
-        return error.message
-      }
-    },
-    HOST,
-    { maxHostCalls: 0 }
-  )
-  t.is(value, TOO_MANY_CALLS)
-  t.deepEqual(calls, [])
-})
-
 test('a host method keeps the host object as its receiver', async t => {
   const host = {
     token: 'secret',
@@ -389,5 +346,5 @@ test('arguments that cannot be keyed do not reach the host', async t => {
   child.emit('message', { id: 1, method: 'ping', args })
   await Promise.resolve()
   t.is(calls, 0)
-  t.deepEqual(replies, [{ id: 1, failed: true, reason: TOO_MANY_CALLS }])
+  t.deepEqual(replies, [{ id: 1, failed: true, reason: UNSHAREABLE_ARGS }])
 })
