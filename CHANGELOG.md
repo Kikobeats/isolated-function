@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.12 (2026-10-01)
+
+
+### Features
+
+* take a named span out of run so the phases add up ([#86](https://github.com/Kikobeats/isolated-function/issues/86)) ([508107a](https://github.com/Kikobeats/isolated-function/commit/508107a550c646acb75a3fbcd1e9e3c9a96123ac))
+
 ### 0.2.11 (2026-09-30)
 
 
