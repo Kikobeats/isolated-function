@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.17 (2026-10-11)
+
+
+### Bug Fixes
+
+* disable node:sqlite in the isolate ([#91](https://github.com/Kikobeats/isolated-function/issues/91)) ([a18c752](https://github.com/Kikobeats/isolated-function/commit/a18c752d55cf06a5c0dfebbc06eec9114a0e1ed0))
+
 ### 0.2.16 (2026-10-09)
 
 ### 0.2.15 (2026-10-05)
