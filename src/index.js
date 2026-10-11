@@ -36,11 +36,15 @@ const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permission'
 
+const DISABLE_UNCHECKED_SQLITE_FLAG = '--no-experimental-sqlite'
+const canDisableSqlite = process.allowedNodeEnvironmentFlags.has(DISABLE_UNCHECKED_SQLITE_FLAG)
+
 const roundMs = entries =>
   Object.fromEntries(entries.map(([key, value]) => [key, Math.round(value)]))
 
 const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
+  if (canDisableSqlite) flags.push(DISABLE_UNCHECKED_SQLITE_FLAG)
   if (memory) flags.push(`--max-old-space-size=${memory}`)
   if (permissions.includes('ffi')) flags.push('--experimental-ffi')
   permissions.forEach(resource => flags.push(`--allow-${resource}`))

@@ -80,6 +80,23 @@ test('worker', async t => {
   t.is(value, 'hello')
 })
 
+const canDisableSqlite = process.allowedNodeEnvironmentFlags.has('--no-experimental-sqlite')
+
+;(canDisableSqlite ? test : test.skip)(
+  'node:sqlite cannot bypass the filesystem permission model',
+  async t => {
+    const fn = isolatedFunction(async () => {
+      const { DatabaseSync } = require('node:' + 'sqlite')
+      const db = new DatabaseSync('/tmp/isolated-function-sqlite-probe.db')
+      db.exec('CREATE TABLE probe (value TEXT)')
+      return 'opened'
+    })
+
+    const error = await t.throwsAsync(fn())
+    t.is(error.code, 'ERR_UNKNOWN_BUILTIN_MODULE')
+  }
+)
+
 test('fs-read with path scope', async t => {
   const fn = isolatedFunction(
     () => {
