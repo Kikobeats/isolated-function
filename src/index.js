@@ -15,7 +15,7 @@ const {
   fillSource,
   fillShell
 } = require('./compile/shells')
-const { METHOD: SSRF_METHOD, prelude: egressPrelude } = require('./egress')
+const { METHOD: SSRF_METHOD, prelude: egressPrelude, createKeys, decision } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
 const { debug } = require('./debug')
@@ -105,12 +105,12 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
     if (ssrf !== undefined && typeof ssrf !== 'function') {
       throw new TypeError('Expected `ssrf` to be a function')
     }
+    if (typeof ssrf === 'function' && ssrf.constructor?.name === 'AsyncFunction') {
+      throw new TypeError('Expected `ssrf` to return a boolean')
+    }
     const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
     const checksDials = typeof ssrf === 'function'
-    const ipcHost = checksDials
-      ? { ...host, [SSRF_METHOD]: (address, port) => ssrf(address, port) === true }
-      : host
     const hasHost = hostMethods !== undefined || checksDials
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
     const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
@@ -122,8 +122,21 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
+        const keys = checksDials ? createKeys() : undefined
+        const ipcHost = checksDials
+          ? {
+              ...host,
+              [SSRF_METHOD]: (address, port) => {
+                let allow = false
+                try {
+                  allow = ssrf(address, port) === true
+                } catch {}
+                return decision(keys.privateKey, address, port, allow)
+              }
+            }
+          : host
         const prelude = `${
-          checksDials ? egressPrelude() : ''
+          checksDials ? egressPrelude(keys.publicKey) : ''
         }globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()

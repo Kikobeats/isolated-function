@@ -131,10 +131,12 @@ export interface IsolatedFunctionOptions {
   /**
    * Called on the host with each address a socket is about to use. Return
    * true to allow it. Any other result, or a throw, refuses the connection
-   * before the handshake. A name is refused when any address it resolves to
-   * is refused. Omit it and outbound connections stay unrestricted.
+   * before the handshake. The function is synchronous: an async function is
+   * rejected when the isolate is created. A numeric port string arrives as
+   * a number. A name is refused when any address it resolves to is refused.
+   * Omit it and outbound connections stay unrestricted.
    */
-  ssrf?: (address: string, port?: number) => boolean
+  ssrf?: (address: string, port?: number | string) => boolean
   /**
    * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
    * Each is resolved when the snippet asks for it and never before, so work the
@@ -197,7 +199,7 @@ export interface IsolatedFunctionInstance {
  * await isolatedFunction.teardown()
  * ```
  */
-declare function createIsolatedFunction(options?: CreateOptions): IsolatedFunctionInstance
+declare function createIsolatedFunction (options?: CreateOptions): IsolatedFunctionInstance
 
 declare namespace createIsolatedFunction {
   /** Placeholder identifier for the `slot` option */

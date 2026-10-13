@@ -54,15 +54,12 @@ if (result.isFulfilled) {
 
 /* with options */
 
-const fnWithOptions = isolatedFunction<string>(
-  () => 'hello',
-  {
-    memory: 128,
-    timeout: 5000,
-    throwError: false,
-    allow: { permissions: ['fs'] }
-  }
-)
+const fnWithOptions = isolatedFunction<string>(() => 'hello', {
+  memory: 128,
+  timeout: 5000,
+  throwError: false,
+  allow: { permissions: ['fs'] }
+})
 
 expectType<IsolatedFn<string>>(fnWithOptions)
 
@@ -141,9 +138,7 @@ if (asyncResult.isFulfilled) {
 
 /* variadic arguments */
 
-const variadicFn = isolatedFunction<number>(
-  (...args: number[]) => args.reduce((a, b) => a + b, 0)
-)
+const variadicFn = isolatedFunction<number>((...args: number[]) => args.reduce((a, b) => a + b, 0))
 
 const variadicResult = await variadicFn(1, 2, 3, 4, 5)
 
@@ -171,5 +166,11 @@ declare const hostCall: HostCall
 expectType<IsolatedFn<string>>(
   isolatedFunction(async () => (await hostCall('content')) as string, {
     host: { content: async () => '<html></html>' }
+  })
+)
+
+expectType<IsolatedFn>(
+  isolatedFunction(() => 1, {
+    ssrf: (address, port) => address === '1.1.1.1' && (port === 443 || port === '443')
   })
 )

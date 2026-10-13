@@ -2,26 +2,80 @@
 
 const METHOD = '__ssrf'
 
-const install = method => {
+/* The isolate can read its own heap, so the signing key stays on the host.
+   The child receives only the public half, which can check a dial and cannot approve one. */
+const createKeys = () => {
+  const { generateKeyPairSync } = require('node:crypto')
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+  return { privateKey, publicKey: publicKey.export({ type: 'spki', format: 'pem' }) }
+}
+
+function dialPayload (address, port, allow) {
+  return `${address}\0${port ?? ''}\0${allow === true}`
+}
+
+const decision = (privateKey, address, port, allow) => {
+  const { sign } = require('node:crypto')
+  const value = allow === true
+  return {
+    allow: value,
+    sig: sign(null, Buffer.from(dialPayload(address, port, value)), privateKey).toString('base64')
+  }
+}
+
+const install = (method, publicKey, encode) => {
   const net = require('node:net')
   const dns = require('node:dns')
+  const { verify, createPublicKey } = require('node:crypto')
+  const key = createPublicKey(publicKey)
+  const request = process.send.bind(process)
   const pending = new Map()
   let id = 0
+
+  const accepted = (address, port, allow, signature) => {
+    if (typeof signature !== 'string' || signature.length === 0) return false
+    try {
+      return verify(
+        null,
+        Buffer.from(encode(address, port, allow)),
+        key,
+        Buffer.from(signature, 'base64')
+      )
+    } catch {
+      return false
+    }
+  }
 
   process.on('message', reply => {
     if (!reply || !pending.has(reply.id)) return
     const waiting = pending.get(reply.id)
+    const body = reply.value
+    if (body === null || typeof body !== 'object') return
+    const allow = body.allow === true
+    if (!accepted(waiting.address, waiting.port, allow, body.sig)) return
     pending.delete(reply.id)
-    if (reply.failed) waiting.reject(new Error(reply.reason))
-    else waiting.resolve(reply.value)
+    waiting.resolve(allow)
   })
+
+  const portOf = port => {
+    if (port == null || port === '') return null
+    if (typeof port === 'number' && Number.isInteger(port) && port >= 0 && port <= 65535) {
+      return port
+    }
+    if (typeof port === 'string' && /^\d+$/.test(port)) {
+      const value = Number(port)
+      if (value <= 65535) return value
+    }
+    return port
+  }
 
   const ask = (address, port) =>
     new Promise((resolve, reject) => {
       const messageId = --id
-      pending.set(messageId, { resolve, reject })
+      const canonical = portOf(port)
+      pending.set(messageId, { resolve, reject, address, port: canonical })
       try {
-        process.send({ id: messageId, method, args: [address, port] }, error => {
+        request({ id: messageId, method, args: [address, canonical] }, error => {
           if (!error) return
           pending.delete(messageId)
           reject(error)
@@ -117,6 +171,9 @@ const install = method => {
   })
 }
 
-const prelude = () => `;(${install.toString()})(${JSON.stringify(METHOD)});\n`
+const prelude = publicKey =>
+  `;(${install.toString()})(${JSON.stringify(METHOD)},${JSON.stringify(
+    publicKey
+  )},${dialPayload.toString()});\n`
 
-module.exports = { METHOD, prelude }
+module.exports = { METHOD, prelude, createKeys, decision }

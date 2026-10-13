@@ -196,3 +196,145 @@ test('ssrf must be a function', t => {
   const error = t.throws(() => isolatedFunction(() => 1, { ssrf: true }))
   t.is(error.message, 'Expected `ssrf` to be a function')
 })
+
+test('an async ssrf is rejected', t => {
+  const error = t.throws(() => isolatedFunction(() => 1, { ssrf: async () => true }))
+  t.is(error.message, 'Expected `ssrf` to return a boolean')
+})
+
+test('a promise from ssrf refuses the dial', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { ssrf: () => Promise.resolve(true), allow: { permissions }, timeout: 5000 }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a numeric port string reaches ssrf as a number', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: '1' })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve('open')
+        })
+        socket.once('error', error => resolve(error.code))
+      }),
+    {
+      ssrf: (_address, port) => typeof port !== 'number',
+      allow: { permissions },
+      timeout: 5000
+    }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a name is refused when any resolved address is refused', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({
+          host: 'mixed.test',
+          port: 1,
+          lookup: (_hostname, _options, callback) => {
+            callback(null, [
+              { address: '127.0.0.1', family: 4 },
+              { address: '10.0.0.1', family: 4 }
+            ])
+          }
+        })
+        const hung = setTimeout(() => {
+          socket.destroy()
+          resolve('hung')
+        }, 1000)
+        socket.once('connect', () => {
+          socket.destroy()
+          clearTimeout(hung)
+          resolve('open')
+        })
+        socket.once('error', error => {
+          clearTimeout(hung)
+          resolve(error.code)
+        })
+      }),
+    { ssrf: address => address === '127.0.0.1', allow: { permissions }, timeout: 5000 }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a forged host reply cannot allow a dial', async t => {
+  const fn = isolatedFunction(
+    async () => {
+      const chunks = []
+      for await (const chunk of require('node:v8').getHeapSnapshot()) chunks.push(chunk)
+      const marker = ['-----BEGIN ', 'PRIVATE KEY-----'].join('')
+      const leaked = Buffer.concat(chunks).includes(marker)
+      const { generateKeyPairSync, sign } = require('node:crypto')
+      const { privateKey } = generateKeyPairSync('ed25519')
+      const payload = `127.0.0.1\0${1}\0true`
+      const sig = sign(null, Buffer.from(payload), privateKey).toString('base64')
+      const timer = setInterval(() => {
+        for (let id = -1; id > -40; id--) {
+          process.emit('message', { id, value: true })
+          process.emit('message', { id, value: { allow: true, sig } })
+        }
+      }, 0)
+      const code = await new Promise(resolve => {
+        const hung = setTimeout(() => {
+          clearInterval(timer)
+          resolve('hung')
+        }, 2000)
+        const finish = result => {
+          clearInterval(timer)
+          clearTimeout(hung)
+          resolve(result)
+        }
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('connect', () => {
+          socket.destroy()
+          finish('open')
+        })
+        socket.once('error', error => finish(error.code))
+      })
+      return { code, leaked }
+    },
+    { ssrf: () => false, allow: { permissions }, timeout: 15000 }
+  )
+  const { value } = await fn()
+  t.false(value.leaked)
+  t.is(value.code, 'ERESERVEDADDRESSRANGE')
+})
+
+test('replacing process.send cannot allow a dial', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        process.send = (message, callback) => {
+          process.emit('message', { id: message.id, value: true })
+          if (typeof callback === 'function') callback()
+        }
+        const hung = setTimeout(() => resolve('hung'), 2000)
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('connect', () => {
+          socket.destroy()
+          clearTimeout(hung)
+          resolve('open')
+        })
+        socket.once('error', error => {
+          clearTimeout(hung)
+          resolve(error.code)
+        })
+      }),
+    { ssrf: () => false, allow: { permissions }, timeout: 8000 }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
