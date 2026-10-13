@@ -15,6 +15,7 @@ const {
   fillSource,
   fillShell
 } = require('./compile/shells')
+const { prelude: egressPrelude } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
 const { debug } = require('./debug')
@@ -101,7 +102,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
       }
     }
-    const { permissions = [] } = allow
+    const { permissions = [], egress } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
     const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
@@ -113,7 +114,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
-        const prelude = `globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
+        const prelude = `${egressPrelude(egress)}globalThis.__isolated_args=${JSON.stringify(
+          JSON.stringify(args)
+        )};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({

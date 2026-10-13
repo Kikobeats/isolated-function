@@ -92,6 +92,13 @@ export interface AllowOptions {
    * Prevents arbitrary package installation from untrusted code.
    */
   dependencies?: string[]
+  /**
+   * When set, the isolate may dial only unicast addresses, plus these exact
+   * `ip:port` exceptions. IPv6 entries use `[ip]:port`. Names that resolve to
+   * a reserved address are refused before the handshake. Omit it and outbound
+   * connections stay unrestricted, which is how existing callers behave.
+   */
+  egress?: string[]
 }
 
 /**
