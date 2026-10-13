@@ -15,7 +15,7 @@ const {
   fillSource,
   fillShell
 } = require('./compile/shells')
-const { prelude: egressPrelude } = require('./egress')
+const { METHOD: SSRF_METHOD, prelude: egressPrelude } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
 const { debug } = require('./debug')
@@ -93,7 +93,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
 
   const isolatedFunction = (
     snippet,
-    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host } = {}
+    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host, ssrf } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     if (slot !== undefined) {
@@ -102,8 +102,16 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         throw new TypeError(`Expected the snippet to contain \`${SLOT}\` exactly once`)
       }
     }
-    const { permissions = [], egress } = allow
+    if (ssrf !== undefined && typeof ssrf !== 'function') {
+      throw new TypeError('Expected `ssrf` to be a function')
+    }
+    const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
+    const checksDials = typeof ssrf === 'function'
+    const ipcHost = checksDials
+      ? { ...host, [SSRF_METHOD]: (address, port) => ssrf(address, port) === true }
+      : host
+    const hasHost = hostMethods !== undefined || checksDials
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
     const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
     const compilePromise =
@@ -114,9 +122,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
-        const prelude = `${egressPrelude(egress)}globalThis.__isolated_args=${JSON.stringify(
-          JSON.stringify(args)
-        )};`
+        const prelude = `${
+          checksDials ? egressPrelude() : ''
+        }globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
@@ -125,9 +133,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
-          hasHost: hostMethods !== undefined
+          hasHost
         })
-        if (hostMethods !== undefined) attachHost(subprocess, host)
+        if (hasHost) attachHost(subprocess, ipcHost)
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

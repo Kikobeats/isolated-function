@@ -52,6 +52,7 @@ ${hostMethods ? hostChannel.source(hostMethods) : ''}
       isFulfilled = false
     } finally {
       ${hostMethods ? `${hostChannel.CLOSE_HOST}()` : ''}
+      if (process.connected) process.disconnect()
       respond(isFulfilled, value, performance.now() - t0, logging)
     }
   })

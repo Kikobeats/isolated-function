@@ -3,12 +3,30 @@
 const net = require('node:net')
 const test = require('ava')
 
-const { normalizeEgress } = require('../src/egress')
 const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
 
 const permissions = nodeMajor >= 25 ? ['net'] : []
+
+const unicast = address => {
+  const value = String(address).toLowerCase()
+  if (value === '127.0.0.1' || value === '::1' || value === '0.0.0.0' || value === '::') {
+    return false
+  }
+  if (value.startsWith('10.') || value.startsWith('169.254.')) return false
+  if (
+    value.startsWith('::ffff:10.') ||
+    value.startsWith('::ffff:7f') ||
+    value.startsWith('::ffff:a9fe:')
+  ) {
+    return false
+  }
+  if (value.includes('10.0.0.1') || value.includes('a00:1') || value.includes('169.254.169.254')) {
+    return false
+  }
+  return true
+}
 
 const probe = `
 async () => {
@@ -47,9 +65,10 @@ async () => {
 }
 `
 
-test('refuses reserved addresses and still reaches a public host', async t => {
+test('the host function decides which addresses can be dialed', async t => {
   const fn = isolatedFunction(probe, {
-    allow: { permissions, egress: [] },
+    ssrf: unicast,
+    allow: { permissions },
     timeout: 20000
   })
   const { value } = await fn()
@@ -64,7 +83,7 @@ test('refuses reserved addresses and still reaches a public host', async t => {
   })
 })
 
-test('an allowlisted loopback port answers and any other loopback port is refused', async t => {
+test('a host that allows an address is not overruled by a built-in range', async t => {
   const server = net.createServer(socket => socket.end('pong'))
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   t.teardown(() => new Promise(resolve => server.close(resolve)))
@@ -82,19 +101,85 @@ test('an allowlisted loopback port answers and any other loopback port is refuse
           socket.once('end', () => resolve(body))
           socket.once('error', error => resolve(error.code))
         })
-      return { allowed: await hit(allowedPort), other: await hit(1) }
+      const pub = await new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '1.1.1.1', port: 443 })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve('open')
+        })
+        socket.once('error', error => resolve(error.code))
+      })
+      return { allowed: await hit(allowedPort), other: await hit(1), pub }
     },
     {
-      allow: { permissions, egress: [`127.0.0.1:${port}`] },
+      ssrf: (address, target) => address === '127.0.0.1' && Number(target) === port,
+      allow: { permissions },
       timeout: 10000
     }
   )
 
   const { value } = await fn(port)
-  t.deepEqual(value, { allowed: 'pong', other: 'ERESERVEDADDRESSRANGE' })
+  t.deepEqual(value, {
+    allowed: 'pong',
+    other: 'ERESERVEDADDRESSRANGE',
+    pub: 'ERESERVEDADDRESSRANGE'
+  })
 })
 
-test('omitted egress does not intercept connections', async t => {
+test('a throwing host check refuses the dial', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('error', error => resolve(error.code))
+      }),
+    {
+      ssrf: () => {
+        throw new Error('nope')
+      },
+      allow: { permissions },
+      timeout: 5000
+    }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a host method and the dial check share one channel', async t => {
+  const fn = isolatedFunction(
+    async () => {
+      const viaHost = await globalThis.__isolated_host('ping')
+      const dial = await new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '10.0.0.1', port: 80 })
+        socket.once('error', error => resolve(error.code))
+      })
+      return { viaHost, dial }
+    },
+    {
+      host: { ping: () => 'pong' },
+      ssrf: () => false,
+      allow: { permissions },
+      timeout: 5000
+    }
+  )
+  const { value } = await fn()
+  t.deepEqual(value, { viaHost: 'pong', dial: 'ERESERVEDADDRESSRANGE' })
+})
+
+test('a unix socket is refused when a dial check is set', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ path: '/tmp/no-such-socket.sock' })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { ssrf: () => true, allow: { permissions }, timeout: 5000 }
+  )
+  const { value } = await fn()
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('omitted ssrf does not intercept connections', async t => {
   const fn = isolatedFunction(
     () =>
       new Promise(resolve => {
@@ -107,7 +192,7 @@ test('omitted egress does not intercept connections', async t => {
   t.is(value, 'ECONNREFUSED')
 })
 
-test('allow.egress rejects a hostname', t => {
-  const error = t.throws(() => normalizeEgress(['localhost:80']))
-  t.is(error.message, 'Expected `allow.egress` entries to be `ip:port`')
+test('ssrf must be a function', t => {
+  const error = t.throws(() => isolatedFunction(() => 1, { ssrf: true }))
+  t.is(error.message, 'Expected `ssrf` to be a function')
 })

@@ -1,99 +1,41 @@
 'use strict'
 
-const net = require('node:net')
+const METHOD = '__ssrf'
 
-/**
- * Same non-unicast ranges `ipaddr.js` `range() === 'unicast'` refuses. The
- * child cannot `require` this file under `--permission`, so `prelude` inlines
- * `install` and the list travels inside it.
- *
- * IPv4-mapped IPv6 is left to `BlockList`, which checks the embedded IPv4.
- * Adding `::ffff:0:0/96` would refuse public addresses written in that form.
- */
-const RANGES = [
-  ['0.0.0.0', 8, 'ipv4'],
-  ['10.0.0.0', 8, 'ipv4'],
-  ['100.64.0.0', 10, 'ipv4'],
-  ['127.0.0.0', 8, 'ipv4'],
-  ['169.254.0.0', 16, 'ipv4'],
-  ['172.16.0.0', 12, 'ipv4'],
-  ['192.0.0.0', 24, 'ipv4'],
-  ['192.0.2.0', 24, 'ipv4'],
-  ['192.31.196.0', 24, 'ipv4'],
-  ['192.52.193.0', 24, 'ipv4'],
-  ['192.88.99.0', 24, 'ipv4'],
-  ['192.168.0.0', 16, 'ipv4'],
-  ['192.175.48.0', 24, 'ipv4'],
-  ['198.18.0.0', 15, 'ipv4'],
-  ['198.51.100.0', 24, 'ipv4'],
-  ['203.0.113.0', 24, 'ipv4'],
-  ['224.0.0.0', 4, 'ipv4'],
-  ['240.0.0.0', 4, 'ipv4'],
-  ['::', 128, 'ipv6'],
-  ['::1', 128, 'ipv6'],
-  ['100::', 64, 'ipv6'],
-  ['2001::', 32, 'ipv6'],
-  ['2001::', 23, 'ipv6'],
-  ['2001:2::', 48, 'ipv6'],
-  ['2001:3::', 32, 'ipv6'],
-  ['2001:4:112::', 48, 'ipv6'],
-  ['2001:10::', 28, 'ipv6'],
-  ['2001:20::', 28, 'ipv6'],
-  ['2001:30::', 28, 'ipv6'],
-  ['2001:db8::', 32, 'ipv6'],
-  ['2002::', 16, 'ipv6'],
-  ['2620:4f:8000::', 48, 'ipv6'],
-  ['3fff::', 20, 'ipv6'],
-  ['5f00::', 16, 'ipv6'],
-  ['64:ff9b::', 96, 'ipv6'],
-  ['64:ff9b:1::', 48, 'ipv6'],
-  ['fc00::', 7, 'ipv6'],
-  ['fe80::', 10, 'ipv6'],
-  ['fec0::', 10, 'ipv6'],
-  ['ff00::', 8, 'ipv6']
-]
-
-const KEY = '/'
-
-const parseEgress = entry => {
-  if (typeof entry !== 'string') return undefined
-  const bracketed = /^\[([^\]]+)\]:(\d+)$/.exec(entry)
-  const plain = /^([^:]+):(\d+)$/.exec(entry)
-  const match = bracketed || plain
-  if (!match) return undefined
-  const host = match[1]
-  const port = match[2]
-  if (net.isIP(host) === 0) return undefined
-  return `${host}${KEY}${port}`
-}
-
-const normalizeEgress = entries => {
-  if (entries === undefined) return []
-  if (!Array.isArray(entries)) throw new TypeError('Expected `allow.egress` to be an array')
-  return entries.map(entry => {
-    const key = parseEgress(entry)
-    if (key === undefined) throw new TypeError('Expected `allow.egress` entries to be `ip:port`')
-    return key
-  })
-}
-
-const install = (allowlist, ranges) => {
+const install = method => {
   const net = require('node:net')
   const dns = require('node:dns')
-  const block = new net.BlockList()
-  for (const [address, prefix, family] of ranges) block.addSubnet(address, prefix, family)
+  const pending = new Map()
+  let id = 0
 
-  const allowed = new Set(allowlist)
-  const isBlocked = address => {
-    const version = net.isIP(address)
-    if (version === 0) return false
-    return block.check(address, version === 6 ? 'ipv6' : 'ipv4')
-  }
+  process.on('message', reply => {
+    if (!reply || !pending.has(reply.id)) return
+    const waiting = pending.get(reply.id)
+    pending.delete(reply.id)
+    if (reply.failed) waiting.reject(new Error(reply.reason))
+    else waiting.resolve(reply.value)
+  })
+
+  const ask = (address, port) =>
+    new Promise((resolve, reject) => {
+      const messageId = --id
+      pending.set(messageId, { resolve, reject })
+      try {
+        process.send({ id: messageId, method, args: [address, port] }, error => {
+          if (!error) return
+          pending.delete(messageId)
+          reject(error)
+        })
+      } catch (error) {
+        pending.delete(messageId)
+        reject(error)
+      }
+    })
+
   const refused = host =>
     Object.assign(new Error(`The url \`${host}\` is not resolving to unicast IP address`), {
       code: 'ERESERVEDADDRESSRANGE'
     })
-  const allowedKey = (host, port) => allowed.has(`${host}/${port}`)
 
   const orig = net.Socket.prototype.connect
   function connect (...args) {
@@ -121,36 +63,50 @@ const install = (allowlist, ranges) => {
     }
 
     const deny = () => {
-      process.nextTick(() => this.destroy(refused(path || host || '')))
+      process.nextTick(() => {
+        if (!this.destroyed) this.destroy(refused(path || host || ''))
+      })
       return this
     }
 
     if (path) return deny()
+
     if (net.isIP(host)) {
-      if (isBlocked(host) && !allowedKey(host, port)) return deny()
-      return orig.apply(this, args)
+      ask(host, port).then(
+        answer => {
+          if (answer !== true || this.destroyed) {
+            if (!this.destroyed) this.destroy(refused(host))
+            return
+          }
+          orig.apply(this, args)
+        },
+        () => {
+          if (!this.destroyed) this.destroy(refused(host))
+        }
+      )
+      return this
     }
 
     const previous = (options && options.lookup) || dns.lookup
     const lookup = (hostname, lookupOptions, callback) => {
-      previous(hostname, { ...lookupOptions, all: true }, (err, addresses) => {
-        if (err) return callback(err)
+      previous(hostname, { ...lookupOptions, all: true }, (error, addresses) => {
+        if (error) return callback(error)
         const list = Array.isArray(addresses) ? addresses : [{ address: addresses }]
-        if (list.length === 0 || list.some(entry => isBlocked(entry.address))) {
-          return callback(refused(hostname))
-        }
-        if (lookupOptions.all) return callback(null, list)
-        callback(null, list[0].address, list[0].family)
+        if (list.length === 0) return callback(refused(hostname))
+        Promise.all(list.map(entry => ask(entry.address, port)))
+          .then(answers => {
+            if (answers.some(answer => answer !== true)) return callback(refused(hostname))
+            if (lookupOptions && lookupOptions.all) return callback(null, list)
+            callback(null, list[0].address, list[0].family)
+          })
+          .catch(() => callback(refused(hostname)))
       })
     }
 
-    if (options) {
-      options.lookup = lookup
-      return orig.apply(this, args)
-    }
-
-    const cb = typeof args[1] === 'function' ? args[1] : args[2]
-    return orig.call(this, { port, host, lookup }, cb)
+    if (options) options.lookup = lookup
+    const cb = options ? args[1] : typeof args[1] === 'function' ? args[1] : args[2]
+    const forwarded = options ? args : [{ port, host, lookup }, cb]
+    return orig.apply(this, forwarded)
   }
 
   Object.defineProperty(net.Socket.prototype, 'connect', {
@@ -161,11 +117,6 @@ const install = (allowlist, ranges) => {
   })
 }
 
-const prelude = entries => {
-  if (entries === undefined) return ''
-  return `;(${install.toString()})(${JSON.stringify(normalizeEgress(entries))},${JSON.stringify(
-    RANGES
-  )});\n`
-}
+const prelude = () => `;(${install.toString()})(${JSON.stringify(METHOD)});\n`
 
-module.exports = { install, normalizeEgress, parseEgress, prelude, RANGES }
+module.exports = { METHOD, prelude }

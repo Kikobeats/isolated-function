@@ -92,13 +92,6 @@ export interface AllowOptions {
    * Prevents arbitrary package installation from untrusted code.
    */
   dependencies?: string[]
-  /**
-   * When set, the isolate may dial only unicast addresses, plus these exact
-   * `ip:port` exceptions. IPv6 entries use `[ip]:port`. Names that resolve to
-   * a reserved address are refused before the handshake. Omit it and outbound
-   * connections stay unrestricted, which is how existing callers behave.
-   */
-  egress?: string[]
 }
 
 /**
@@ -135,6 +128,13 @@ export interface IsolatedFunctionOptions {
   throwError?: boolean
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
+  /**
+   * Called on the host with each address a socket is about to use. Return
+   * true to allow it. Any other result, or a throw, refuses the connection
+   * before the handshake. A name is refused when any address it resolves to
+   * is refused. Omit it and outbound connections stay unrestricted.
+   */
+  ssrf?: (address: string, port?: number) => boolean
   /**
    * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
    * Each is resolved when the snippet asks for it and never before, so work the
