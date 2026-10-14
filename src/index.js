@@ -112,6 +112,19 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
     const hostMethods = host === undefined ? undefined : Object.keys(host)
     const checksDials = typeof ssrf === 'function'
     const hasHost = hostMethods !== undefined || checksDials
+    if (
+      checksDials &&
+      permissions.some(permission =>
+        ['child-process', 'child_process', 'worker'].includes(permission)
+      )
+    ) {
+      throw new TypeError(
+        'Expected `ssrf` not to be combined with worker or child-process permissions'
+      )
+    }
+    if (checksDials && hostMethods?.includes(SSRF_METHOD)) {
+      throw new TypeError(`Expected \`host\` not to expose \`${SSRF_METHOD}\``)
+    }
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
     const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
     const compilePromise =

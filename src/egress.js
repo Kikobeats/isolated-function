@@ -62,9 +62,9 @@ const install = (method, publicKey, encode) => {
     if (typeof port === 'number' && Number.isInteger(port) && port >= 0 && port <= 65535) {
       return port
     }
-    if (typeof port === 'string' && /^\d+$/.test(port)) {
-      const value = Number(port)
-      if (value <= 65535) return value
+    if (typeof port === 'string' && port.trim() !== '') {
+      const value = +port
+      if (value === value >>> 0 && value <= 65535) return value
     }
     return port
   }

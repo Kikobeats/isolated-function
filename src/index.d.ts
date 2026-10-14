@@ -132,8 +132,10 @@ export interface IsolatedFunctionOptions {
    * Called on the host with each address a socket is about to use. Return
    * true to allow it. Any other result, or a throw, refuses the connection
    * before the handshake. The function is synchronous: an async function is
-   * rejected when the isolate is created. A numeric port string arrives as
-   * a number. A name is refused when any address it resolves to is refused.
+   * rejected when the isolate is created. A port string Node accepts arrives
+   * as that port number. It cannot be combined with the worker or
+   * child-process permissions, and `host` cannot expose `__ssrf`. A name is
+   * refused when any address it resolves to is refused.
    * Omit it and outbound connections stay unrestricted.
    */
   ssrf?: (address: string, port?: number | string) => boolean

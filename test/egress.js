@@ -202,6 +202,60 @@ test('an async ssrf is rejected', t => {
   t.is(error.message, 'Expected `ssrf` to return a boolean')
 })
 
+test('ssrf cannot be combined with a worker or a child process', t => {
+  for (const permission of ['worker', 'child-process', 'child_process']) {
+    const error = t.throws(() =>
+      isolatedFunction(() => 1, {
+        ssrf: () => true,
+        allow: { permissions: [permission] }
+      })
+    )
+    t.is(
+      error.message,
+      'Expected `ssrf` not to be combined with worker or child-process permissions'
+    )
+  }
+})
+
+test('a host method named __ssrf is rejected', t => {
+  const error = t.throws(() =>
+    isolatedFunction(() => 1, { host: { __ssrf: () => true }, ssrf: () => true })
+  )
+  t.is(error.message, 'Expected `host` not to expose `__ssrf`')
+})
+
+test('a port string is the port Node dials', async t => {
+  const fn = isolatedFunction(
+    async () => {
+      const hit = port =>
+        new Promise(resolve => {
+          const socket = require('node:net').connect({ host: '127.0.0.1', port })
+          socket.once('connect', () => {
+            socket.destroy()
+            resolve('open')
+          })
+          socket.once('error', error => resolve(error.code))
+        })
+      return {
+        hex: await hit('0x1'),
+        spaced: await hit(' 1'),
+        decimal: await hit('1.0'),
+        exp: await hit('1e0'),
+        other: await hit('0x2')
+      }
+    },
+    { ssrf: (_address, port) => port === 1, allow: { permissions }, timeout: 5000 }
+  )
+  const { value } = await fn()
+  t.deepEqual(value, {
+    hex: 'ECONNREFUSED',
+    spaced: 'ECONNREFUSED',
+    decimal: 'ECONNREFUSED',
+    exp: 'ECONNREFUSED',
+    other: 'ERESERVEDADDRESSRANGE'
+  })
+})
+
 test('a promise from ssrf refuses the dial', async t => {
   const fn = isolatedFunction(
     () =>
