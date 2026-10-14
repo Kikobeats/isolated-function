@@ -1,6 +1,7 @@
 'use strict'
 
 const METHOD = '__ssrf'
+const NESTED = new Set(['child-process', 'child_process', 'worker'])
 
 /* The isolate can read its own heap, so the signing key stays on the host.
    The child receives only the public half, which can check a dial and cannot approve one. */
@@ -14,7 +15,7 @@ function dialPayload (address, port, allow) {
   return `${address}\0${port ?? ''}\0${allow === true}`
 }
 
-const decision = (privateKey, address, port, allow) => {
+const signDecision = (privateKey, address, port, allow) => {
   const { sign } = require('node:crypto')
   const value = allow === true
   return {
@@ -23,6 +24,15 @@ const decision = (privateKey, address, port, allow) => {
   }
 }
 
+const signedAnswer = (privateKey, ssrf) => (address, port) => {
+  let allowed = false
+  try {
+    allowed = ssrf(address, port) === true
+  } catch {}
+  return signDecision(privateKey, address, port, allowed)
+}
+
+/* install and dialPayload are copied in as source. The child cannot require this file. */
 const install = (method, publicKey, encode) => {
   const net = require('node:net')
   const dns = require('node:dns')
@@ -32,7 +42,7 @@ const install = (method, publicKey, encode) => {
   const pending = new Map()
   let id = 0
 
-  const accepted = (address, port, allow, signature) => {
+  const verified = (address, port, allow, signature) => {
     if (typeof signature !== 'string' || signature.length === 0) return false
     try {
       return verify(
@@ -52,7 +62,7 @@ const install = (method, publicKey, encode) => {
     const body = reply.value
     if (body === null || typeof body !== 'object') return
     const allow = body.allow === true
-    if (!accepted(waiting.address, waiting.port, allow, body.sig)) return
+    if (!verified(waiting.address, waiting.port, allow, body.sig)) return
     pending.delete(reply.id)
     waiting.resolve(allow)
   })
@@ -91,8 +101,7 @@ const install = (method, publicKey, encode) => {
       code: 'ERESERVEDADDRESSRANGE'
     })
 
-  const orig = net.Socket.prototype.connect
-  function connect (...args) {
+  const describe = args => {
     const head = args[0]
     const options = Array.isArray(head)
       ? head[0]
@@ -115,29 +124,29 @@ const install = (method, publicKey, encode) => {
     if (typeof host === 'string' && host.startsWith('[') && host.endsWith(']')) {
       host = host.slice(1, -1)
     }
+    return { options, host, port, path }
+  }
 
+  const orig = net.Socket.prototype.connect
+  function connect (...args) {
+    const { options, host, port, path } = describe(args)
     const deny = () => {
       process.nextTick(() => {
         if (!this.destroyed) this.destroy(refused(path || host || ''))
       })
       return this
     }
+    const fail = () => {
+      if (!this.destroyed) this.destroy(refused(host))
+    }
 
     if (path) return deny()
 
     if (net.isIP(host)) {
-      ask(host, port).then(
-        answer => {
-          if (answer !== true || this.destroyed) {
-            if (!this.destroyed) this.destroy(refused(host))
-            return
-          }
-          orig.apply(this, args)
-        },
-        () => {
-          if (!this.destroyed) this.destroy(refused(host))
-        }
-      )
+      ask(host, port).then(answer => {
+        if (answer !== true || this.destroyed) return fail()
+        orig.apply(this, args)
+      }, fail)
       return this
     }
 
@@ -171,9 +180,32 @@ const install = (method, publicKey, encode) => {
   })
 }
 
-const prelude = publicKey =>
+const preludeFor = publicKey =>
   `;(${install.toString()})(${JSON.stringify(METHOD)},${JSON.stringify(
     publicKey
   )},${dialPayload.toString()});\n`
 
-module.exports = { METHOD, prelude, createKeys, decision }
+const assertCanCheck = (ssrf, { permissions = [], hostMethods } = {}) => {
+  if (ssrf !== undefined && typeof ssrf !== 'function') {
+    throw new TypeError('Expected `ssrf` to be a function')
+  }
+  if (typeof ssrf === 'function' && ssrf.constructor?.name === 'AsyncFunction') {
+    throw new TypeError('Expected `ssrf` to return a boolean')
+  }
+  if (typeof ssrf !== 'function') return
+  if (permissions.some(permission => NESTED.has(permission))) {
+    throw new TypeError(
+      'Expected `ssrf` not to be combined with worker or child-process permissions'
+    )
+  }
+  if (hostMethods?.includes(METHOD)) {
+    throw new TypeError(`Expected \`host\` not to expose \`${METHOD}\``)
+  }
+}
+
+const start = ssrf => {
+  const { privateKey, publicKey } = createKeys()
+  return { prelude: preludeFor(publicKey), answer: signedAnswer(privateKey, ssrf) }
+}
+
+module.exports = { METHOD, assertCanCheck, start }
