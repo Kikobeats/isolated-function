@@ -143,8 +143,12 @@ const install = (method, publicKey, encode) => {
     if (path) return deny()
 
     if (net.isIP(host)) {
+      // The caller can write as soon as connect() returns. Buffer that write
+      // until the host answers, the way a DNS lookup already does.
+      this.connecting = true
       ask(host, port).then(answer => {
         if (answer !== true || this.destroyed) return fail()
+        this.connecting = false
         orig.apply(this, args)
       }, fail)
       return this
