@@ -15,6 +15,7 @@ const {
   fillSource,
   fillShell
 } = require('./compile/shells')
+const { METHOD: SSRF_METHOD, assertCanCheck, start: startDialCheck } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
 const { debug } = require('./debug')
@@ -92,7 +93,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
 
   const isolatedFunction = (
     snippet,
-    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host } = {}
+    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host, ssrf } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
     if (slot !== undefined) {
@@ -103,6 +104,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
     }
     const { permissions = [] } = allow
     const hostMethods = host === undefined ? undefined : Object.keys(host)
+    assertCanCheck(ssrf, { permissions, hostMethods })
+    const checksDials = typeof ssrf === 'function'
+    const hasHost = hostMethods !== undefined || checksDials
     if (hostMethods?.length === 0) throw new TypeError('Expected `host` to expose a method')
     const compileOpts = { tmpdir, allow, nodePaths, esbuild: callEsbuild ?? esbuild, hostMethods }
     const compilePromise =
@@ -113,7 +117,11 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
-        const prelude = `globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
+        const dial = checksDials ? startDialCheck(ssrf) : undefined
+        const ipcHost = dial ? { ...host, [SSRF_METHOD]: dial.answer } : host
+        const prelude = `${dial ? dial.prelude : ''}globalThis.__isolated_args=${JSON.stringify(
+          JSON.stringify(args)
+        )};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
@@ -122,9 +130,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
-          hasHost: hostMethods !== undefined
+          hasHost
         })
-        if (hostMethods !== undefined) attachHost(subprocess, host)
+        if (hasHost) attachHost(subprocess, ipcHost)
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess
