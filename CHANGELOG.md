@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.19 (2026-10-14)
+
+
+### Bug Fixes
+
+* buffer writes until an isolate dial is allowed ([#93](https://github.com/Kikobeats/isolated-function/issues/93)) ([8d54fce](https://github.com/Kikobeats/isolated-function/commit/8d54fce1cdcc7fbac6819935ea9423e5764a1a65))
+
 ### 0.2.18 (2026-10-14)
 
 
