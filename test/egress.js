@@ -1,5 +1,6 @@
 'use strict'
 
+const http = require('node:http')
 const net = require('node:net')
 const test = require('ava')
 
@@ -124,6 +125,37 @@ test('a host that allows an address is not overruled by a built-in range', async
     other: 'ERESERVEDADDRESSRANGE',
     pub: 'ERESERVEDADDRESSRANGE'
   })
+})
+
+test('a request written before the host answers still reaches an allowed address', async t => {
+  const server = http.createServer((req, res) => {
+    res.end(req.url)
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    async allowedPort => {
+      const http = require('node:http')
+      return await new Promise(resolve => {
+        const req = http.get(`http://127.0.0.1:${allowedPort}/token`, res => {
+          const chunks = []
+          res.on('data', chunk => chunks.push(chunk))
+          res.on('end', () => resolve(Buffer.concat(chunks).toString()))
+        })
+        req.on('error', error => resolve(error.code))
+      })
+    },
+    {
+      ssrf: (address, target) => address === '127.0.0.1' && Number(target) === port,
+      allow: { permissions },
+      timeout: 10000
+    }
+  )
+
+  const { value } = await fn(port)
+  t.is(value, '/token')
 })
 
 test('a throwing host check refuses the dial', async t => {
