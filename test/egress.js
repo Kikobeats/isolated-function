@@ -461,7 +461,7 @@ test('hosts keeps an allowed name and refuses every other dial', async t => {
     },
     {
       ssrf: () => true,
-      hosts: [{ host: 'localhost', port: String(port) }],
+      hosts: [{ host: 'LOCALHOST', port: String(port) }],
       allow: { permissions },
       timeout: 10000,
       throwError: false
@@ -475,6 +475,59 @@ test('hosts keeps an allowed name and refuses every other dial', async t => {
     raw: 'EOUTGOINGREQUEST',
     other: 'EOUTGOINGREQUEST'
   })
+})
+
+test('an empty hosts list refuses every public dial', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '1.1.1.1', port: 443 })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve('open')
+        })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { ssrf: () => true, hosts: [], allow: { permissions }, timeout: 8000, throwError: false }
+  )
+  const result = await fn()
+  t.true(result.outgoing)
+  t.is(result.value, 'EOUTGOINGREQUEST')
+})
+
+test('a snippet cannot retarget a listed name', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const dns = require('node:dns')
+        dns.lookup = (hostname, options, callback) => {
+          const done = typeof options === 'function' ? options : callback
+          const list = [{ address: '1.1.1.1', family: 4 }]
+          done(null, options && options.all ? list : '1.1.1.1', 4)
+        }
+        require('node:net').isIP = () => 0
+        globalThis.URL = class {
+          get hostname () {
+            return 'localhost'
+          }
+        }
+        const socket = require('node:net').connect({ host: 'localhost', port: 443 })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve('open')
+        })
+        socket.once('error', error => resolve(error.code))
+      }),
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: '443' }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn()
+  t.not(result.value, 'open')
 })
 
 test('hosts requires ssrf', t => {

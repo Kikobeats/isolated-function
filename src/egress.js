@@ -1,8 +1,34 @@
 'use strict'
 
+const dns = require('node:dns')
+const net = require('node:net')
+
 const METHOD = '__ssrf'
 const HOST_DENIED = '*'
 const NESTED = new Set(['child-process', 'child_process', 'worker'])
+
+const hostKey = (host, port) => {
+  if (typeof host !== 'string' || host.length === 0 || port == null || port === '') return ''
+  const authority = net.isIP(host) === 6 ? `[${host}]` : host
+  try {
+    return `${new URL(`http://${authority}`).hostname}\0${port}`
+  } catch {
+    return ''
+  }
+}
+
+const isLoopback = address => {
+  const host = String(address).toLowerCase()
+  return host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1'
+}
+
+const resolveAddresses = hostname =>
+  new Promise((resolve, reject) => {
+    dns.lookup(hostname, { all: true }, (error, records) => {
+      if (error) reject(error)
+      else resolve(records.map(record => String(record.address).toLowerCase()))
+    })
+  })
 
 /* The isolate can read its own heap, so the signing key stays on the host.
    The child receives only the public half, which can check a dial and cannot approve one. */
@@ -38,6 +64,9 @@ const install = (method, publicKey, encode, hosts, denied) => {
   const net = require('node:net')
   const dns = require('node:dns')
   const { verify, createPublicKey } = require('node:crypto')
+  const isIP = net.isIP
+  const dnsLookup = dns.lookup
+  const ParseURL = globalThis.URL
   const key = createPublicKey(publicKey)
   const request = process.send.bind(process)
   const pending = new Map()
@@ -80,13 +109,13 @@ const install = (method, publicKey, encode, hosts, denied) => {
     return port
   }
 
-  const ask = (address, port) =>
+  const ask = (address, port, hostname) =>
     new Promise((resolve, reject) => {
       const messageId = --id
       const canonical = portOf(port)
       pending.set(messageId, { resolve, reject, address, port: canonical })
       try {
-        request({ id: messageId, method, args: [address, canonical] }, error => {
+        request({ id: messageId, method, args: [address, canonical, hostname ?? null] }, error => {
           if (!error) return
           pending.delete(messageId)
           reject(error)
@@ -97,10 +126,21 @@ const install = (method, publicKey, encode, hosts, denied) => {
       }
     })
 
+  const dialKey = (host, port) => {
+    const parsed = portOf(port)
+    if (parsed == null || typeof host !== 'string' || host.length === 0) return ''
+    const authority = isIP(host) === 6 ? `[${host}]` : host
+    try {
+      return `${new ParseURL(`http://${authority}`).hostname}\0${parsed}`
+    } catch {
+      return ''
+    }
+  }
+
   const allowed = new Set(
-    (Array.isArray(hosts) ? hosts : []).map(entry => `${entry.host}\0${entry.port}`)
+    (Array.isArray(hosts) ? hosts : []).map(entry => dialKey(entry.host, entry.port))
   )
-  const limited = allowed.size > 0
+  const limited = Array.isArray(hosts)
 
   const refused = (host, code = 'ERESERVEDADDRESSRANGE') =>
     Object.assign(
@@ -115,17 +155,6 @@ const install = (method, publicKey, encode, hosts, denied) => {
   const loopback = value => {
     const host = String(value).toLowerCase()
     return host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1'
-  }
-
-  const dialKey = (host, port) => {
-    const parsed = portOf(port)
-    if (parsed == null || typeof host !== 'string' || host.length === 0) return ''
-    const authority = net.isIP(host) === 6 ? `[${host}]` : host
-    try {
-      return `${new URL(`http://${authority}`).hostname}\0${parsed}`
-    } catch {
-      return ''
-    }
   }
 
   const describe = args => {
@@ -177,15 +206,15 @@ const install = (method, publicKey, encode, hosts, denied) => {
 
     if (path) return deny()
 
-    if (limited && net.isIP(host) && !loopback(host)) return block()
+    if (limited && isIP(host) && !loopback(host)) return block()
 
-    if (limited && !net.isIP(host) && !allowed.has(dialKey(host, port))) return block()
+    if (limited && !isIP(host) && !allowed.has(dialKey(host, port))) return block()
 
-    if (net.isIP(host)) {
+    if (isIP(host)) {
       // The caller can write as soon as connect() returns. Buffer that write
       // until the host answers, the way a DNS lookup already does.
       this.connecting = true
-      ask(host, port).then(answer => {
+      ask(host, port, host).then(answer => {
         if (answer !== true || this.destroyed) return fail()
         this.connecting = false
         orig.apply(this, args)
@@ -193,13 +222,13 @@ const install = (method, publicKey, encode, hosts, denied) => {
       return this
     }
 
-    const previous = (options && options.lookup) || dns.lookup
+    const previous = (options && options.lookup) || dnsLookup
     const lookup = (hostname, lookupOptions, callback) => {
       previous(hostname, { ...lookupOptions, all: true }, (error, addresses) => {
         if (error) return callback(error)
         const list = Array.isArray(addresses) ? addresses : [{ address: addresses }]
         if (list.length === 0) return callback(refused(hostname))
-        Promise.all(list.map(entry => ask(entry.address, port)))
+        Promise.all(list.map(entry => ask(entry.address, port, hostname)))
           .then(answers => {
             if (answers.some(answer => answer !== true)) return callback(refused(hostname))
             if (lookupOptions && lookupOptions.all) return callback(null, list)
@@ -226,7 +255,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
 const preludeFor = (publicKey, hosts) =>
   `;(${install.toString()})(${JSON.stringify(METHOD)},${JSON.stringify(
     publicKey
-  )},${dialPayload.toString()},${JSON.stringify(hosts ?? [])},${JSON.stringify(HOST_DENIED)});\n`
+  )},${dialPayload.toString()},${JSON.stringify(hosts ?? null)},${JSON.stringify(HOST_DENIED)});\n`
 
 const assertCanCheck = (ssrf, { permissions = [], hostMethods } = {}) => {
   if (ssrf !== undefined && typeof ssrf !== 'function') {
@@ -249,11 +278,33 @@ const assertCanCheck = (ssrf, { permissions = [], hostMethods } = {}) => {
 const start = (ssrf, hosts) => {
   const { privateKey, publicKey } = createKeys()
   const decide = signedAnswer(privateKey, ssrf)
+  const allowed =
+    hosts == null
+      ? null
+      : new Set(hosts.map(entry => hostKey(entry.host, String(Number(entry.port)))))
   let seen = false
-  const answer = (address, port) => {
+  const answer = async (address, port, hostname) => {
     if (address === HOST_DENIED) {
       seen = true
       return signDecision(privateKey, address, port, false)
+    }
+    if (allowed) {
+      const named =
+        typeof hostname === 'string' && !net.isIP(hostname) && allowed.has(hostKey(hostname, port))
+      if (named) {
+        let records
+        try {
+          records = await resolveAddresses(hostname)
+        } catch {
+          return signDecision(privateKey, address, port, false)
+        }
+        if (!records.includes(String(address).toLowerCase())) {
+          return signDecision(privateKey, address, port, false)
+        }
+      } else if (!isLoopback(address)) {
+        seen = true
+        return signDecision(privateKey, address, port, false)
+      }
     }
     return decide(address, port)
   }

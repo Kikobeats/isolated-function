@@ -120,7 +120,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       ) {
         throw new TypeError('Expected `hosts` to be { host, port } pairs')
       }
-      if (hosts.length > 0 && typeof ssrf !== 'function') {
+      if (typeof ssrf !== 'function') {
         throw new TypeError('Expected `ssrf` when `hosts` is set')
       }
     }
