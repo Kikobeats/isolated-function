@@ -59,10 +59,11 @@ const flags = ({ memory, permissions }) => {
 }
 
 // Node on Linux maps a 4GB virtual range for Wasm linear memory. Official
-// builds leave pointer compression off, and a ceiling of only the slack made
-// Node 24.21 kill a 1-page Wasm.Memory and process.abort(). The slack is
+// builds leave pointer compression off, and a ceiling of only the slack killed
+// Node 24.21 on a 1-page Wasm.Memory and on process.abort(). The slack is
 // off-heap room (Buffer, WebAssembly), which --max-old-space-size ignores.
-const RESERVE_MB = process.platform === 'linux' ? 4096 : 0
+// virtualKb runs only on Linux, so the reserve is unconditional here.
+const RESERVE_MB = 4096
 const ADDRESS_SLACK_MB = 1024
 
 const virtualKb = memory => (RESERVE_MB + ADDRESS_SLACK_MB + memory) * 1024

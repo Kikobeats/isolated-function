@@ -5,6 +5,9 @@ const test = require('ava')
 const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
+const canDisableWasmTrapHandler = process.allowedNodeEnvironmentFlags.has(
+  '--disable-wasm-trap-handler'
+)
 
 test('throw an error if snippet is not a function or string', t => {
   t.throws(
@@ -141,6 +144,44 @@ test('a small wasm memory allocates under the memory limit', async t => {
   t.is(result.value, 65536)
 })
 
+test('the wasm trap handler is disabled only under the linux memory ceiling', async t => {
+  const fn = isolatedFunction(
+    () => process.env.NODE_OPTIONS.includes('--disable-wasm-trap-handler'),
+    { memory: 64 }
+  )
+
+  const { value } = await fn()
+
+  t.is(value, process.platform === 'linux' && canDisableWasmTrapHandler)
+})
+
+/* A 1-page Wasm.Memory still allocates when the ceiling is missing, so that
+   test does not lock the limit. Read the rlimits the child actually received. */
+;(process.platform === 'linux' ? test : test.skip)(
+  'linux memory ceiling and soft cpu limit are the limits the child runs under',
+  async t => {
+    const memory = 64
+    const fn = isolatedFunction(() => require('fs').readFileSync('/proc/self/limits', 'utf8'), {
+      memory,
+      timeout: 30000,
+      allow: { permissions: ['fs-read=/proc'] }
+    })
+
+    const { value } = await fn()
+    const limit = name => {
+      const line = value.split('\n').find(entry => entry.trim().startsWith(name))
+      const [, soft, hard] = line.trim().split(/\s{2,}/)
+      return { soft, hard }
+    }
+
+    t.deepEqual(limit('Max address space'), {
+      soft: String((4096 + 1024 + memory) * 1024 * 1024),
+      hard: String((4096 + 1024 + memory) * 1024 * 1024)
+    })
+    t.deepEqual(limit('Max cpu time'), { soft: '30', hard: 'unlimited' })
+  }
+)
+
 test('a kill the host did not issue is reported as out of memory', async t => {
   const fn = isolatedFunction(
     () => {
@@ -153,6 +194,7 @@ test('a kill the host did not issue is reported as out of memory', async t => {
 
   t.is(error.name, 'MemoryError')
   t.is(error.message, 'Out of memory')
+  t.is(typeof error.profiling.phases.total, 'number')
 })
 
 test('an abort that is not OOM is not reported as MemoryError', async t => {
