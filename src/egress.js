@@ -210,6 +210,20 @@ const install = (method, publicKey, encode, hosts, denied) => {
 
     if (limited && !isIP(host) && !allowed.has(dialKey(host, port))) return block()
 
+    // The options object stays with the caller. A getter, or a write after
+    // connect() returns, can point it at another address once the check has
+    // passed. Dial a copy that keeps the host and port that were checked.
+    const proceed = extra => {
+      const approved = { ...options, host, port, ...extra }
+      delete approved.path
+      const head = args[0]
+      let cb
+      if (Array.isArray(head)) cb = typeof head[1] === 'function' ? head[1] : undefined
+      else if (typeof args[1] === 'function') cb = args[1]
+      else if (typeof args[2] === 'function') cb = args[2]
+      return orig.apply(this, [approved, cb])
+    }
+
     if (isIP(host)) {
       // The caller can write as soon as connect() returns. Buffer that write
       // until the host answers, the way a DNS lookup already does.
@@ -217,7 +231,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
       ask(host, port, host).then(answer => {
         if (answer !== true || this.destroyed) return fail()
         this.connecting = false
-        orig.apply(this, args)
+        proceed()
       }, fail)
       return this
     }
@@ -238,10 +252,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
       })
     }
 
-    if (options) options.lookup = lookup
-    const cb = options ? args[1] : typeof args[1] === 'function' ? args[1] : args[2]
-    const forwarded = options ? args : [{ port, host, lookup }, cb]
-    return orig.apply(this, forwarded)
+    return proceed({ lookup })
   }
 
   Object.defineProperty(net.Socket.prototype, 'connect', {
