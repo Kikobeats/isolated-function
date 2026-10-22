@@ -3,7 +3,9 @@
 const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { Readable } = require('node:stream')
+const { existsSync } = require('node:fs')
 const { rm } = require('fs/promises')
+const path = require('node:path')
 const $ = require('tinyspawn')
 
 const {
@@ -40,6 +42,9 @@ const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permi
 const DISABLE_UNCHECKED_SQLITE_FLAG = '--no-experimental-sqlite'
 const canDisableSqlite = process.allowedNodeEnvironmentFlags.has(DISABLE_UNCHECKED_SQLITE_FLAG)
 
+const DISABLE_WASM_TRAP_HANDLER = '--disable-wasm-trap-handler'
+const canDisableWasmTrapHandler = process.allowedNodeEnvironmentFlags.has(DISABLE_WASM_TRAP_HANDLER)
+
 const roundMs = entries =>
   Object.fromEntries(entries.map(([key, value]) => [key, Math.round(value)]))
 
@@ -47,19 +52,47 @@ const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (canDisableSqlite) flags.push(DISABLE_UNCHECKED_SQLITE_FLAG)
   if (memory) flags.push(`--max-old-space-size=${memory}`)
+  if (process.platform === 'linux' && memory && canDisableWasmTrapHandler) {
+    flags.push(DISABLE_WASM_TRAP_HANDLER)
+  }
   if (permissions.includes('ffi')) flags.push('--experimental-ffi')
   permissions.forEach(resource => flags.push(`--allow-${resource}`))
   return flags.join(' ')
 }
 
-const spawn = ({ env, timeout, hasHost }) => {
+// Node on Linux maps a 4GB virtual range for Wasm linear memory. Official
+// builds leave pointer compression off, and a ceiling of only the slack killed
+// Node 24.21 on a 1-page Wasm.Memory and on process.abort(). The slack is
+// off-heap room (Buffer, WebAssembly), which --max-old-space-size ignores.
+// virtualKb runs only on Linux, so the reserve is unconditional here.
+const RESERVE_MB = 4096
+const ADDRESS_SLACK_MB = 1024
+
+const virtualKb = memory => (RESERVE_MB + ADDRESS_SLACK_MB + memory) * 1024
+
+// ulimit is a shell builtin. Without sh, a memory limit still runs: the heap
+// cap is --max-old-space-size, and the virtual-memory ceiling is skipped.
+const hasShell = () =>
+  (process.env.PATH ?? '')
+    .split(path.delimiter)
+    .some(dir => dir && existsSync(path.join(dir, 'sh')))
+
+const spawn = ({ env, timeout, hasHost, memory }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
-  if (Number.isFinite(timeout)) {
-    const seconds = Math.ceil(timeout / 1000)
-    return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-'], spawnOpts)
+  const limits = []
+  if (process.platform === 'linux' && memory && hasShell()) {
+    const kb = virtualKb(memory)
+    // A hard limit below the ceiling cannot be raised. Keep it and still start node.
+    limits.push(
+      `hard=$(ulimit -H -v); if [ "$hard" = unlimited ] || [ "$hard" -gt ${kb} ]; then ulimit -v ${kb}; fi`
+    )
   }
-  return $('node', ['-'], spawnOpts)
+  // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
+  // indistinguishable from the OOM killer.
+  if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
+  if (limits.length === 0) return $('node', ['-'], spawnOpts)
+  return $('sh', ['-c', `${limits.join(' && ')} && exec node "$@"`, '_', '-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
@@ -130,7 +163,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
-          hasHost
+          hasHost,
+          memory
         })
         if (hasHost) attachHost(subprocess, ipcHost)
         subprocess.stdin?.on('error', () => {})
@@ -169,7 +203,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         debug.error(serializeError(error))
         const profiling = { phases: { total: total() } }
 
-        if (isOutOfMemory(error)) {
+        if (isOutOfMemory(error) || (error.signalCode === 'SIGKILL' && !error.killed)) {
           throw createError({
             name: 'MemoryError',
             message: 'Out of memory',

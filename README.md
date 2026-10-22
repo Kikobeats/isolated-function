@@ -279,7 +279,7 @@ await fn()
 ```
 
 > [!IMPORTANT]
-> The `memory` limit bounds the **V8 heap** (`profiling.memory.heap`), which is where ordinary objects and strings live. It does **not** bound off-heap memory (`profiling.memory.external`): `Buffer`, `ArrayBuffer`, and typed arrays are allocated outside the heap and can grow past the limit without raising `MemoryError`. If a function must be held to a total memory budget, enforce it outside the process (for example a cgroup) rather than relying on `memory` alone.
+> The `memory` limit bounds the **V8 heap** (`profiling.memory.heap`), which is where ordinary objects and strings live. Off-heap memory (`profiling.memory.external`) — `Buffer`, `ArrayBuffer`, and typed arrays — can grow past that number. On Linux, when `sh` is on `PATH`, the process also gets a virtual-memory ceiling above the limit, so an allocation past the ceiling fails. A `SIGKILL` the host did not issue, including one from a cgroup, is reported as `MemoryError`. The host's wall-clock timeout stays `TimeoutError`. Holding the process to a resident-memory budget still belongs outside the process, for example in a cgroup.
 
 or by execution time:
 
@@ -403,7 +403,7 @@ const isolatedFunction = require('isolated-function')({
 Type: `number`<br>
 Default: `Infinity`
 
-Set the function memory limit, in megabytes.
+Set the function memory limit, in megabytes. This bounds the V8 heap. On Linux, when `sh` is on `PATH`, it also sets a virtual-memory ceiling above that limit.
 
 #### throwError
 

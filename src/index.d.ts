@@ -122,7 +122,7 @@ export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
 export interface IsolatedFunctionOptions {
   /** Execution timeout in milliseconds. Also enforces a CPU time limit via RLIMIT_CPU. */
   timeout?: number
-  /** Memory limit in megabytes */
+  /** Memory limit in megabytes. Bounds the V8 heap. On Linux, when `sh` is on PATH, also sets a virtual-memory ceiling above that. */
   memory?: number
   /** When false, returns the error instead of throwing it */
   throwError?: boolean

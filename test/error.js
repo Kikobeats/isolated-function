@@ -5,6 +5,9 @@ const test = require('ava')
 const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
+const canDisableWasmTrapHandler = process.allowedNodeEnvironmentFlags.has(
+  '--disable-wasm-trap-handler'
+)
 
 test('throw an error if snippet is not a function or string', t => {
   t.throws(
@@ -120,6 +123,147 @@ test('handle OOM at a production-sized limit', async t => {
     () => {
       const storage = []
       while (true) storage.push('x'.repeat(1024))
+    },
+    { memory: 16 }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.is(error.name, 'MemoryError')
+  t.is(error.message, 'Out of memory')
+  t.is(typeof error.profiling.phases.total, 'number')
+})
+
+test('a small wasm memory allocates under the memory limit', async t => {
+  const fn = isolatedFunction(() => new WebAssembly.Memory({ initial: 1 }).buffer.byteLength, {
+    memory: 64
+  })
+
+  const result = await fn()
+
+  t.is(result.value, 65536)
+})
+
+test('the wasm trap handler is disabled only under the linux memory ceiling', async t => {
+  const fn = isolatedFunction(
+    () => process.env.NODE_OPTIONS.includes('--disable-wasm-trap-handler'),
+    { memory: 64 }
+  )
+
+  const { value } = await fn()
+
+  t.is(value, process.platform === 'linux' && canDisableWasmTrapHandler)
+})
+
+/* A 1-page Wasm.Memory still allocates when the ceiling is missing, so that
+   test does not lock the limit. Read the rlimits the child actually received. */
+;(process.platform === 'linux' ? test : test.skip)(
+  'linux memory ceiling and soft cpu limit are the limits the child runs under',
+  async t => {
+    const memory = 64
+    const fn = isolatedFunction(() => require('fs').readFileSync('/proc/self/limits', 'utf8'), {
+      memory,
+      timeout: 30000,
+      allow: { permissions: ['fs-read=/proc'] }
+    })
+
+    const { value } = await fn()
+    const limit = (text, name) => {
+      const line = text.split('\n').find(entry => entry.trim().startsWith(name))
+      const [, soft, hard] = line.trim().split(/\s{2,}/)
+      return { soft, hard }
+    }
+
+    t.deepEqual(limit(value, 'Max address space'), {
+      soft: String((4096 + 1024 + memory) * 1024 * 1024),
+      hard: String((4096 + 1024 + memory) * 1024 * 1024)
+    })
+    // `ulimit -S` leaves the hard limit at whatever the parent inherited.
+    const parentHard = limit(
+      require('fs').readFileSync('/proc/self/limits', 'utf8'),
+      'Max cpu time'
+    ).hard
+    t.deepEqual(limit(value, 'Max cpu time'), { soft: '30', hard: parentHard })
+  }
+)
+
+/* A parent hard limit below the ceiling cannot be raised. Node must still start. */
+;(process.platform === 'linux' ? test : test.skip)(
+  'a tighter inherited address-space limit still runs the isolate',
+  async t => {
+    const { spawnSync } = require('node:child_process')
+    const path = require('node:path')
+    const kb = (4096 + 1024 + 64) * 1024
+    const tighter = kb - 128 * 1024
+    const root = path.join(__dirname, '..')
+    const code = `
+      const isolatedFunction = require(${JSON.stringify(path.join(root, 'src/index.js'))})()
+      isolatedFunction(() => {
+        const text = require('fs').readFileSync('/proc/self/limits', 'utf8')
+        const line = text.split('\\n').find(entry => entry.trim().startsWith('Max address space'))
+        return Number(line.trim().split(/\\s{2,}/)[1])
+      }, { memory: 64, allow: { permissions: ['fs-read=/proc'] } })().then(async result => {
+        process.stdout.write(String(result.value))
+        await isolatedFunction.teardown()
+      }).catch(error => {
+        console.error(error)
+        process.exit(1)
+      })
+    `
+    const encoded = Buffer.from(code).toString('base64')
+    const result = spawnSync(
+      'sh',
+      [
+        '-c',
+        `ulimit -v ${tighter} && exec node -e "eval(Buffer.from('${encoded}','base64').toString())"`
+      ],
+      { encoding: 'utf8', timeout: 30000 }
+    )
+
+    t.is(result.status, 0, result.stderr)
+    t.is(Number(result.stdout), tighter * 1024)
+  }
+)
+
+/* A memory limit must not start requiring sh. Hide the shell and keep node. */
+;(process.platform === 'linux' ? test.serial : test.skip)(
+  'a memory limit runs when sh is not on PATH',
+  async t => {
+    const fs = require('fs')
+    const os = require('os')
+    const path = require('path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'isolated-no-sh-'))
+    fs.symlinkSync(process.execPath, path.join(dir, 'node'))
+    const previous = process.env.PATH
+    process.env.PATH = dir
+    try {
+      const fn = isolatedFunction(
+        () => {
+          const text = require('fs').readFileSync('/proc/self/limits', 'utf8')
+          const line = text.split('\n').find(entry => entry.trim().startsWith('Max address space'))
+          return line.trim().split(/\s{2,}/)[1]
+        },
+        { memory: 64, allow: { permissions: ['fs-read=/proc'] } }
+      )
+      const parent = require('fs')
+        .readFileSync('/proc/self/limits', 'utf8')
+        .split('\n')
+        .find(entry => entry.trim().startsWith('Max address space'))
+        .trim()
+        .split(/\s{2,}/)[1]
+
+      t.is((await fn()).value, parent)
+    } finally {
+      process.env.PATH = previous
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
+
+test('a kill the host did not issue is reported as out of memory', async t => {
+  const fn = isolatedFunction(
+    () => {
+      process.kill(process.pid, 'SIGKILL')
     },
     { memory: 16 }
   )
