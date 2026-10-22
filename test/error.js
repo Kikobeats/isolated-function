@@ -187,6 +187,44 @@ test('the wasm trap handler is disabled only under the linux memory ceiling', as
   }
 )
 
+/* A parent hard limit below the ceiling cannot be raised. Node must still start. */
+;(process.platform === 'linux' ? test : test.skip)(
+  'a tighter inherited address-space limit still runs the isolate',
+  async t => {
+    const { spawnSync } = require('node:child_process')
+    const path = require('node:path')
+    const kb = (4096 + 1024 + 64) * 1024
+    const tighter = kb - 128 * 1024
+    const root = path.join(__dirname, '..')
+    const code = `
+      const isolatedFunction = require(${JSON.stringify(path.join(root, 'src/index.js'))})()
+      isolatedFunction(() => {
+        const text = require('fs').readFileSync('/proc/self/limits', 'utf8')
+        const line = text.split('\\n').find(entry => entry.trim().startsWith('Max address space'))
+        return Number(line.trim().split(/\\s{2,}/)[1])
+      }, { memory: 64, allow: { permissions: ['fs-read=/proc'] } })().then(async result => {
+        process.stdout.write(String(result.value))
+        await isolatedFunction.teardown()
+      }).catch(error => {
+        console.error(error)
+        process.exit(1)
+      })
+    `
+    const encoded = Buffer.from(code).toString('base64')
+    const result = spawnSync(
+      'sh',
+      [
+        '-c',
+        `ulimit -v ${tighter} && exec node -e "eval(Buffer.from('${encoded}','base64').toString())"`
+      ],
+      { encoding: 'utf8', timeout: 30000 }
+    )
+
+    t.is(result.status, 0, result.stderr)
+    t.is(Number(result.stdout), tighter * 1024)
+  }
+)
+
 /* A memory limit must not start requiring sh. Hide the shell and keep node. */
 ;(process.platform === 'linux' ? test.serial : test.skip)(
   'a memory limit runs when sh is not on PATH',

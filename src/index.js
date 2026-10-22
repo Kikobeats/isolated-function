@@ -82,7 +82,11 @@ const spawn = ({ env, timeout, hasHost, memory }) => {
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   const limits = []
   if (process.platform === 'linux' && memory && hasShell()) {
-    limits.push(`ulimit -v ${virtualKb(memory)}`)
+    const kb = virtualKb(memory)
+    // A hard limit below the ceiling cannot be raised. Keep it and still start node.
+    limits.push(
+      `hard=$(ulimit -H -v); if [ "$hard" = unlimited ] || [ "$hard" -gt ${kb} ]; then ulimit -v ${kb}; fi`
+    )
   }
   // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
   // indistinguishable from the OOM killer.
