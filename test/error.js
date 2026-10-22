@@ -168,17 +168,57 @@ test('the wasm trap handler is disabled only under the linux memory ceiling', as
     })
 
     const { value } = await fn()
-    const limit = name => {
-      const line = value.split('\n').find(entry => entry.trim().startsWith(name))
+    const limit = (text, name) => {
+      const line = text.split('\n').find(entry => entry.trim().startsWith(name))
       const [, soft, hard] = line.trim().split(/\s{2,}/)
       return { soft, hard }
     }
 
-    t.deepEqual(limit('Max address space'), {
+    t.deepEqual(limit(value, 'Max address space'), {
       soft: String((4096 + 1024 + memory) * 1024 * 1024),
       hard: String((4096 + 1024 + memory) * 1024 * 1024)
     })
-    t.deepEqual(limit('Max cpu time'), { soft: '30', hard: 'unlimited' })
+    // `ulimit -S` leaves the hard limit at whatever the parent inherited.
+    const parentHard = limit(
+      require('fs').readFileSync('/proc/self/limits', 'utf8'),
+      'Max cpu time'
+    ).hard
+    t.deepEqual(limit(value, 'Max cpu time'), { soft: '30', hard: parentHard })
+  }
+)
+
+/* A memory limit must not start requiring sh. Hide the shell and keep node. */
+;(process.platform === 'linux' ? test.serial : test.skip)(
+  'a memory limit runs when sh is not on PATH',
+  async t => {
+    const fs = require('fs')
+    const os = require('os')
+    const path = require('path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'isolated-no-sh-'))
+    fs.symlinkSync(process.execPath, path.join(dir, 'node'))
+    const previous = process.env.PATH
+    process.env.PATH = dir
+    try {
+      const fn = isolatedFunction(
+        () => {
+          const text = require('fs').readFileSync('/proc/self/limits', 'utf8')
+          const line = text.split('\n').find(entry => entry.trim().startsWith('Max address space'))
+          return line.trim().split(/\s{2,}/)[1]
+        },
+        { memory: 64, allow: { permissions: ['fs-read=/proc'] } }
+      )
+      const parent = require('fs')
+        .readFileSync('/proc/self/limits', 'utf8')
+        .split('\n')
+        .find(entry => entry.trim().startsWith('Max address space'))
+        .trim()
+        .split(/\s{2,}/)[1]
+
+      t.is((await fn()).value, parent)
+    } finally {
+      process.env.PATH = previous
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
   }
 )
 

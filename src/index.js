@@ -3,7 +3,9 @@
 const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { Readable } = require('node:stream')
+const { existsSync } = require('node:fs')
 const { rm } = require('fs/promises')
+const path = require('node:path')
 const $ = require('tinyspawn')
 
 const {
@@ -68,11 +70,20 @@ const ADDRESS_SLACK_MB = 1024
 
 const virtualKb = memory => (RESERVE_MB + ADDRESS_SLACK_MB + memory) * 1024
 
+// ulimit is a shell builtin. Without sh, a memory limit still runs: the heap
+// cap is --max-old-space-size, and the virtual-memory ceiling is skipped.
+const hasShell = () =>
+  (process.env.PATH ?? '')
+    .split(path.delimiter)
+    .some(dir => dir && existsSync(path.join(dir, 'sh')))
+
 const spawn = ({ env, timeout, hasHost, memory }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   const limits = []
-  if (process.platform === 'linux' && memory) limits.push(`ulimit -v ${virtualKb(memory)}`)
+  if (process.platform === 'linux' && memory && hasShell()) {
+    limits.push(`ulimit -v ${virtualKb(memory)}`)
+  }
   // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
   // indistinguishable from the OOM killer.
   if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
