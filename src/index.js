@@ -52,14 +52,22 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
-const spawn = ({ env, timeout, hasHost }) => {
+// V8 reserves a 4GB pointer-compression cage. RLIMIT_AS counts that reservation,
+// so the ceiling has to clear it or node never starts. Bytes past the cage are
+// the off-heap budget (Buffer, WebAssembly), which --max-old-space-size ignores.
+const CAGE_MB = 4096
+const ADDRESS_SLACK_MB = 1024
+
+const virtualKb = memory => (CAGE_MB + ADDRESS_SLACK_MB + memory) * 1024
+
+const spawn = ({ env, timeout, hasHost, memory }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
-  if (Number.isFinite(timeout)) {
-    const seconds = Math.ceil(timeout / 1000)
-    return $('sh', ['-c', `ulimit -t ${seconds} && exec node "$@"`, '_', '-'], spawnOpts)
-  }
-  return $('node', ['-'], spawnOpts)
+  const limits = []
+  if (process.platform === 'linux' && memory) limits.push(`ulimit -v ${virtualKb(memory)}`)
+  if (Number.isFinite(timeout)) limits.push(`ulimit -t ${Math.ceil(timeout / 1000)}`)
+  if (limits.length === 0) return $('node', ['-'], spawnOpts)
+  return $('sh', ['-c', `${limits.join(' && ')} && exec node "$@"`, '_', '-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
@@ -130,7 +138,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
-          hasHost
+          hasHost,
+          memory
         })
         if (hasHost) attachHost(subprocess, ipcHost)
         subprocess.stdin?.on('error', () => {})
@@ -169,7 +178,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         debug.error(serializeError(error))
         const profiling = { phases: { total: total() } }
 
-        if (isOutOfMemory(error)) {
+        if (isOutOfMemory(error) || (error.signalCode === 'SIGKILL' && !error.killed)) {
           throw createError({
             name: 'MemoryError',
             message: 'Out of memory',

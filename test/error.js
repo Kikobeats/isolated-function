@@ -131,6 +131,20 @@ test('handle OOM at a production-sized limit', async t => {
   t.is(typeof error.profiling.phases.total, 'number')
 })
 
+test('a kill the host did not issue is reported as out of memory', async t => {
+  const fn = isolatedFunction(
+    () => {
+      process.kill(process.pid, 'SIGKILL')
+    },
+    { memory: 16 }
+  )
+
+  const error = await t.throwsAsync(fn())
+
+  t.is(error.name, 'MemoryError')
+  t.is(error.message, 'Out of memory')
+})
+
 test('an abort that is not OOM is not reported as MemoryError', async t => {
   const fn = isolatedFunction(() => process.abort(), { memory: 16 })
 
