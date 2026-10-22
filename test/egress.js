@@ -498,6 +498,36 @@ test('an empty hosts list refuses every public dial', async t => {
   t.is(result.value, 'EOUTGOINGREQUEST')
 })
 
+test('an omitted host is localhost', async t => {
+  const server = net.createServer(socket => socket.end('ok'))
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    allowedPort =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ port: allowedPort })
+        let body = ''
+        socket.on('data', chunk => {
+          body += chunk
+        })
+        socket.once('end', () => resolve(body))
+        socket.once('error', error => resolve(error.code))
+      }),
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: String(port) }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn(port)
+  t.falsy(result.outgoing)
+  t.is(result.value, 'ok')
+})
+
 test('an unlisted loopback dial is refused and a listed one follows ssrf', async t => {
   const fn = isolatedFunction(
     () => {

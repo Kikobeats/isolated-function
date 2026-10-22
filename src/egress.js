@@ -175,7 +175,9 @@ const install = (method, publicKey, encode, hosts, denied) => {
 
   const orig = net.Socket.prototype.connect
   function connect (...args) {
-    const { options, host, port, path } = describe(args)
+    const described = describe(args)
+    const host = described.host ?? 'localhost'
+    const { options, port, path } = described
     const deny = () => {
       process.nextTick(() => {
         if (!this.destroyed) this.destroy(refused(path || host || ''))
