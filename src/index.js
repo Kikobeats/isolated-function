@@ -72,7 +72,9 @@ const spawn = ({ env, timeout, hasHost, memory }) => {
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   const limits = []
   if (process.platform === 'linux' && memory) limits.push(`ulimit -v ${virtualKb(memory)}`)
-  if (Number.isFinite(timeout)) limits.push(`ulimit -t ${Math.ceil(timeout / 1000)}`)
+  // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
+  // indistinguishable from the OOM killer.
+  if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
   if (limits.length === 0) return $('node', ['-'], spawnOpts)
   return $('sh', ['-c', `${limits.join(' && ')} && exec node "$@"`, '_', '-'], spawnOpts)
 }
