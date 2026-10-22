@@ -58,14 +58,14 @@ const flags = ({ memory, permissions }) => {
   return flags.join(' ')
 }
 
-// Official Node builds leave pointer compression off, so there is no 4GB cage.
-// A build that enables it reserves that cage inside RLIMIT_AS, and the child
-// cannot start unless the ceiling clears it. The slack is off-heap room
-// (Buffer, WebAssembly), which --max-old-space-size ignores.
-const CAGE_MB = process.config?.variables?.v8_enable_pointer_compression === 1 ? 4096 : 0
+// Node on Linux maps a 4GB virtual range for Wasm linear memory. Official
+// builds leave pointer compression off, and a ceiling of only the slack made
+// Node 24.21 kill a 1-page Wasm.Memory and process.abort(). The slack is
+// off-heap room (Buffer, WebAssembly), which --max-old-space-size ignores.
+const RESERVE_MB = process.platform === 'linux' ? 4096 : 0
 const ADDRESS_SLACK_MB = 1024
 
-const virtualKb = memory => (CAGE_MB + ADDRESS_SLACK_MB + memory) * 1024
+const virtualKb = memory => (RESERVE_MB + ADDRESS_SLACK_MB + memory) * 1024
 
 const spawn = ({ env, timeout, hasHost, memory }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
