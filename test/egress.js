@@ -1,7 +1,10 @@
 'use strict'
 
+const fs = require('node:fs')
 const http = require('node:http')
 const net = require('node:net')
+const os = require('node:os')
+const path = require('node:path')
 const test = require('ava')
 
 const isolatedFunction = require('..')()
@@ -423,4 +426,339 @@ test('replacing process.send cannot allow a dial', async t => {
   )
   const { value } = await fn()
   t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('hosts keeps an allowed name and refuses every other dial', async t => {
+  const server = http.createServer((req, res) => {
+    res.end('ok')
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    async allowedPort => {
+      const hit = (host, target) =>
+        new Promise(resolve => {
+          const socket = require('node:net').connect({ host, port: target })
+          let body = ''
+          socket.on('data', chunk => {
+            body += chunk
+          })
+          socket.once('end', () => resolve(body))
+          socket.once('error', error => resolve(error.code))
+        })
+      const named = await new Promise(resolve => {
+        const req = require('node:http').get(`http://localhost:${allowedPort}/`, res => {
+          const chunks = []
+          res.on('data', chunk => chunks.push(chunk))
+          res.on('end', () => resolve(Buffer.concat(chunks).toString()))
+        })
+        req.on('error', error => resolve(error.code))
+      })
+      return {
+        named,
+        raw: await hit('1.1.1.1', 443),
+        other: await hit('example.org', 443)
+      }
+    },
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'LOCALHOST', port: String(port) }],
+      allow: { permissions },
+      timeout: 10000,
+      throwError: false
+    }
+  )
+
+  const result = await fn(port)
+  t.true(result.outgoing)
+  t.deepEqual(result.value, {
+    named: 'ok',
+    raw: 'EOUTGOINGREQUEST',
+    other: 'EOUTGOINGREQUEST'
+  })
+})
+
+test('an empty hosts list refuses every public dial', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '1.1.1.1', port: 443 })
+        socket.once('connect', () => {
+          socket.destroy()
+          resolve('open')
+        })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { ssrf: () => true, hosts: [], allow: { permissions }, timeout: 8000, throwError: false }
+  )
+  const result = await fn()
+  t.true(result.outgoing)
+  t.is(result.value, 'EOUTGOINGREQUEST')
+})
+
+test('an omitted host is localhost', async t => {
+  const server = net.createServer(socket => socket.end('ok'))
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    allowedPort =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ port: allowedPort })
+        let body = ''
+        socket.on('data', chunk => {
+          body += chunk
+        })
+        socket.once('end', () => resolve(body))
+        socket.once('error', error => resolve(error.code))
+      }),
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: String(port) }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn(port)
+  t.falsy(result.outgoing)
+  t.is(result.value, 'ok')
+})
+
+test('an unlisted loopback dial is refused and a listed one follows ssrf', async t => {
+  const fn = isolatedFunction(
+    () => {
+      const hit = port =>
+        new Promise(resolve => {
+          const socket = require('node:net').connect({ host: '127.0.0.1', port })
+          socket.once('connect', () => {
+            socket.destroy()
+            resolve('open')
+          })
+          socket.once('error', error => resolve(error.code))
+        })
+      return Promise.all([hit(1), hit(9)]).then(([unlisted, listed]) => ({ unlisted, listed }))
+    },
+    {
+      ssrf: (address, port) => address === '127.0.0.1' && Number(port) === 1,
+      hosts: [{ host: '127.0.0.1', port: '9' }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn()
+  t.true(result.outgoing)
+  t.deepEqual(result.value, { unlisted: 'EOUTGOINGREQUEST', listed: 'ERESERVEDADDRESSRANGE' })
+})
+
+test('a snippet cannot retarget a listed name', async t => {
+  const server = net.createServer(socket => socket.end('ok'))
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    async allowedPort => {
+      const dns = require('node:dns')
+      dns.lookup = (hostname, options, callback) => {
+        const done = typeof options === 'function' ? options : callback
+        done(null, '10.255.255.1', 4)
+      }
+      require('node:net').isIP = () => 0
+      globalThis.URL = class {
+        get hostname () {
+          return 'localhost'
+        }
+      }
+
+      const hit = options =>
+        new Promise(resolve => {
+          const socket = new (require('node:net').Socket)()
+          socket.connect(options)
+          let body = ''
+          socket.on('data', chunk => {
+            body += chunk
+          })
+          socket.once('end', () => resolve(body))
+          socket.once('error', error => resolve(error.code))
+        })
+
+      return {
+        captured: await hit({ host: 'localhost', port: allowedPort }),
+        retarget: await hit({
+          host: 'localhost',
+          port: allowedPort,
+          lookup (hostname, options, callback) {
+            const done = typeof options === 'function' ? options : callback
+            const address = '192.0.2.1'
+            if (options && options.all) done(null, [{ address, family: 4 }])
+            else done(null, address, 4)
+          }
+        })
+      }
+    },
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: String(port) }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn(port)
+  t.falsy(result.outgoing)
+  t.deepEqual(result.value, { captured: 'ok', retarget: 'ERESERVEDADDRESSRANGE' })
+})
+
+test('a dial keeps the host and port that were checked', async t => {
+  const listen = label => {
+    const server = net.createServer(socket => socket.end(label))
+    return new Promise(resolve => {
+      server.listen(0, '127.0.0.1', () => resolve(server))
+    })
+  }
+  const allowed = await listen('AAA')
+  const other = await listen('BBB')
+  t.teardown(() =>
+    Promise.all([allowed, other].map(server => new Promise(resolve => server.close(resolve))))
+  )
+  const portA = allowed.address().port
+  const portB = other.address().port
+
+  const fn = isolatedFunction(
+    async (allowedPort, otherPort) => {
+      const bodyOf = options =>
+        new Promise(resolve => {
+          const socket = new (require('node:net').Socket)()
+          socket.connect(options)
+          let body = ''
+          socket.on('data', chunk => {
+            body += chunk
+          })
+          socket.once('end', () => resolve(body))
+          socket.once('error', error => resolve(error.code))
+        })
+      const openOrCode = (options, alter) =>
+        new Promise(resolve => {
+          const socket = new (require('node:net').Socket)()
+          socket.once('connect', () => {
+            socket.destroy()
+            resolve('open')
+          })
+          socket.once('error', error => resolve(error.code))
+          socket.connect(options)
+          alter(options)
+        })
+
+      let reads = 0
+      const named = await bodyOf({
+        host: 'localhost',
+        get port () {
+          reads += 1
+          return reads === 1 ? allowedPort : otherPort
+        }
+      })
+      const rewritten = await openOrCode({ host: '127.0.0.1', port: 1 }, options => {
+        options.host = '1.1.1.1'
+        options.port = 443
+      })
+      return { named, rewritten }
+    },
+    {
+      ssrf: () => true,
+      hosts: [
+        { host: 'localhost', port: String(portA) },
+        { host: '127.0.0.1', port: '1' }
+      ],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+
+  const result = await fn(portA, portB)
+  t.falsy(result.outgoing)
+  t.deepEqual(result.value, { named: 'AAA', rewritten: 'ECONNREFUSED' })
+})
+
+test('a dial cannot switch to a unix socket after the check', async t => {
+  const sock = path.join(os.tmpdir(), `isolated-function-${process.pid}.sock`)
+  const server = net.createServer(socket => socket.end('pipe'))
+  await new Promise(resolve => server.listen(sock, resolve))
+  t.teardown(() =>
+    new Promise(resolve => server.close(resolve)).then(() => fs.promises.rm(sock, { force: true }))
+  )
+
+  const fn = isolatedFunction(
+    sockPath =>
+      new Promise(resolve => {
+        const options = { host: '127.0.0.1', port: 1 }
+        const socket = new (require('node:net').Socket)()
+        let body = ''
+        socket.on('data', chunk => {
+          body += chunk
+        })
+        socket.once('end', () => resolve(body))
+        socket.once('error', error => resolve(error.code))
+        socket.connect(options)
+        options.path = sockPath
+      }),
+    {
+      ssrf: () => true,
+      hosts: [{ host: '127.0.0.1', port: '1' }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+
+  const result = await fn(sock)
+  t.falsy(result.outgoing)
+  t.is(result.value, 'ECONNREFUSED')
+})
+
+test('hosts requires ssrf', t => {
+  const error = t.throws(() =>
+    isolatedFunction('() => 1', { hosts: [{ host: 'example.com', port: '443' }] })
+  )
+  t.is(error.message, 'Expected `ssrf` when `hosts` is set')
+})
+
+test('the host refuses a public address asked for an unlisted name', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        const timer = setTimeout(() => resolve('silent'), 1000)
+        process.on('message', reply => {
+          if (!reply || reply.id !== 1) return
+          clearTimeout(timer)
+          resolve(reply.value && reply.value.allow === true ? 'allow' : 'deny')
+        })
+        process.send({ id: 1, method: '__ssrf', args: ['1.1.1.1', 80, 'evil.example'] })
+      }),
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: '80' }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn()
+  t.true(result.outgoing)
+  t.is(result.value, 'deny')
+})
+
+test('hosts rejects a pair that is not a host and port', t => {
+  const error = t.throws(() =>
+    isolatedFunction('() => 1', {
+      ssrf: () => true,
+      hosts: [{ host: 'example.com', port: 443 }]
+    })
+  )
+  t.is(error.message, 'Expected `hosts` to be { host, port } pairs')
 })

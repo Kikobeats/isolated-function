@@ -67,6 +67,7 @@ jobs:
         uses: coverallsapp/github-action@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          fail-on-error: false
       - name: Release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}

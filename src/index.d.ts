@@ -67,6 +67,8 @@ export interface SuccessResult<T = unknown> {
   value: T
   profiling: Profiling
   logging: Logging
+  /** Set when a dial was refused because it was outside `hosts`. */
+  outgoing?: boolean
 }
 
 /**
@@ -77,6 +79,8 @@ export interface FailureResult {
   value: Error
   profiling: Profiling
   logging: Logging
+  /** Set when a dial was refused because it was outside `hosts`. */
+  outgoing?: boolean
 }
 
 export type ExecutionResult<T = unknown> = SuccessResult<T> | FailureResult
@@ -139,6 +143,13 @@ export interface IsolatedFunctionOptions {
    * Omit it and outbound connections stay unrestricted.
    */
   ssrf?: (address: string, port?: number | string) => boolean
+  /**
+   * Names and addresses the isolate may dial, as `{ host, port }` (`port` is
+   * the decimal string, including the scheme default). Any other dial is
+   * refused. A listed dial still follows `ssrf`. Requires `ssrf`. Omit it
+   * and every dial is left to `ssrf`.
+   */
+  hosts?: Array<{ host: string, port: string }>
   /**
    * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
    * Each is resolved when the snippet asks for it and never before, so work the
