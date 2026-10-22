@@ -498,6 +498,33 @@ test('an empty hosts list refuses every public dial', async t => {
   t.is(result.value, 'EOUTGOINGREQUEST')
 })
 
+test('an unlisted loopback dial is refused and a listed one follows ssrf', async t => {
+  const fn = isolatedFunction(
+    () => {
+      const hit = port =>
+        new Promise(resolve => {
+          const socket = require('node:net').connect({ host: '127.0.0.1', port })
+          socket.once('connect', () => {
+            socket.destroy()
+            resolve('open')
+          })
+          socket.once('error', error => resolve(error.code))
+        })
+      return Promise.all([hit(1), hit(9)]).then(([unlisted, listed]) => ({ unlisted, listed }))
+    },
+    {
+      ssrf: (address, port) => address === '127.0.0.1' && Number(port) === 1,
+      hosts: [{ host: '127.0.0.1', port: '9' }],
+      allow: { permissions },
+      timeout: 8000,
+      throwError: false
+    }
+  )
+  const result = await fn()
+  t.true(result.outgoing)
+  t.deepEqual(result.value, { unlisted: 'EOUTGOINGREQUEST', listed: 'ERESERVEDADDRESSRANGE' })
+})
+
 test('a snippet cannot retarget a listed name', async t => {
   const server = net.createServer(socket => socket.end('ok'))
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -613,7 +640,10 @@ test('a dial keeps the host and port that were checked', async t => {
     },
     {
       ssrf: () => true,
-      hosts: [{ host: 'localhost', port: String(portA) }],
+      hosts: [
+        { host: 'localhost', port: String(portA) },
+        { host: '127.0.0.1', port: '1' }
+      ],
       allow: { permissions },
       timeout: 8000,
       throwError: false
@@ -649,7 +679,7 @@ test('a dial cannot switch to a unix socket after the check', async t => {
       }),
     {
       ssrf: () => true,
-      hosts: [],
+      hosts: [{ host: '127.0.0.1', port: '1' }],
       allow: { permissions },
       timeout: 8000,
       throwError: false

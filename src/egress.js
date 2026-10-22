@@ -17,11 +17,6 @@ const hostKey = (host, port) => {
   }
 }
 
-const isLoopback = address => {
-  const host = String(address).toLowerCase()
-  return host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1'
-}
-
 const resolveAddresses = hostname =>
   new Promise((resolve, reject) => {
     dns.lookup(hostname, { all: true }, (error, records) => {
@@ -152,11 +147,6 @@ const install = (method, publicKey, encode, hosts, denied) => {
       { code }
     )
 
-  const loopback = value => {
-    const host = String(value).toLowerCase()
-    return host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1'
-  }
-
   const describe = args => {
     const head = args[0]
     const options = Array.isArray(head)
@@ -206,9 +196,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
 
     if (path) return deny()
 
-    if (limited && isIP(host) && !loopback(host)) return block()
-
-    if (limited && !isIP(host) && !allowed.has(dialKey(host, port))) return block()
+    if (limited && !allowed.has(dialKey(host, port))) return block()
 
     // The options object stays with the caller. A getter, or a write after
     // connect() returns, can point it at another address once the check has
@@ -312,7 +300,7 @@ const start = (ssrf, hosts) => {
         if (!records.includes(String(address).toLowerCase())) {
           return signDecision(privateKey, address, port, false)
         }
-      } else if (!isLoopback(address)) {
+      } else if (!allowed.has(hostKey(String(address), port))) {
         seen = true
         return signDecision(privateKey, address, port, false)
       }

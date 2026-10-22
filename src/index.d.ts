@@ -144,10 +144,10 @@ export interface IsolatedFunctionOptions {
    */
   ssrf?: (address: string, port?: number | string) => boolean
   /**
-   * Names the isolate may dial, as `{ host, port }` (`port` is the decimal
-   * string, including the scheme default). Any other name, and any public
-   * address dialed directly, is refused. Loopback still follows `ssrf`.
-   * Requires `ssrf`. Omit it and every name is left to `ssrf`.
+   * Names and addresses the isolate may dial, as `{ host, port }` (`port` is
+   * the decimal string, including the scheme default). Any other dial is
+   * refused. A listed dial still follows `ssrf`. Requires `ssrf`. Omit it
+   * and every dial is left to `ssrf`.
    */
   hosts?: Array<{ host: string, port: string }>
   /**
