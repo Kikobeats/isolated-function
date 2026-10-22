@@ -40,6 +40,9 @@ const PERMISSION_FLAG = nodeMajor >= 24 ? '--permission' : '--experimental-permi
 const DISABLE_UNCHECKED_SQLITE_FLAG = '--no-experimental-sqlite'
 const canDisableSqlite = process.allowedNodeEnvironmentFlags.has(DISABLE_UNCHECKED_SQLITE_FLAG)
 
+const DISABLE_WASM_TRAP_HANDLER = '--disable-wasm-trap-handler'
+const canDisableWasmTrapHandler = process.allowedNodeEnvironmentFlags.has(DISABLE_WASM_TRAP_HANDLER)
+
 const roundMs = entries =>
   Object.fromEntries(entries.map(([key, value]) => [key, Math.round(value)]))
 
@@ -47,15 +50,19 @@ const flags = ({ memory, permissions }) => {
   const flags = ['--disable-warning=ExperimentalWarning', PERMISSION_FLAG]
   if (canDisableSqlite) flags.push(DISABLE_UNCHECKED_SQLITE_FLAG)
   if (memory) flags.push(`--max-old-space-size=${memory}`)
+  if (process.platform === 'linux' && memory && canDisableWasmTrapHandler) {
+    flags.push(DISABLE_WASM_TRAP_HANDLER)
+  }
   if (permissions.includes('ffi')) flags.push('--experimental-ffi')
   permissions.forEach(resource => flags.push(`--allow-${resource}`))
   return flags.join(' ')
 }
 
-// V8 reserves a 4GB pointer-compression cage. RLIMIT_AS counts that reservation,
-// so the ceiling has to clear it or node never starts. Bytes past the cage are
-// the off-heap budget (Buffer, WebAssembly), which --max-old-space-size ignores.
-const CAGE_MB = 4096
+// Official Node builds leave pointer compression off, so there is no 4GB cage.
+// A build that enables it reserves that cage inside RLIMIT_AS, and the child
+// cannot start unless the ceiling clears it. The slack is off-heap room
+// (Buffer, WebAssembly), which --max-old-space-size ignores.
+const CAGE_MB = process.config?.variables?.v8_enable_pointer_compression === 1 ? 4096 : 0
 const ADDRESS_SLACK_MB = 1024
 
 const virtualKb = memory => (CAGE_MB + ADDRESS_SLACK_MB + memory) * 1024

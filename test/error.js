@@ -131,6 +131,16 @@ test('handle OOM at a production-sized limit', async t => {
   t.is(typeof error.profiling.phases.total, 'number')
 })
 
+test('a small wasm memory allocates under the memory limit', async t => {
+  const fn = isolatedFunction(() => new WebAssembly.Memory({ initial: 1 }).buffer.byteLength, {
+    memory: 64
+  })
+
+  const result = await fn()
+
+  t.is(result.value, 65536)
+})
+
 test('a kill the host did not issue is reported as out of memory', async t => {
   const fn = isolatedFunction(
     () => {
