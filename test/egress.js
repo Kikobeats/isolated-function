@@ -424,3 +424,62 @@ test('replacing process.send cannot allow a dial', async t => {
   const { value } = await fn()
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })
+
+test('hosts keeps an allowed name and refuses every other dial', async t => {
+  const server = http.createServer((req, res) => {
+    res.end('ok')
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.teardown(() => new Promise(resolve => server.close(resolve)))
+  const { port } = server.address()
+
+  const fn = isolatedFunction(
+    async allowedPort => {
+      const hit = (host, target) =>
+        new Promise(resolve => {
+          const socket = require('node:net').connect({ host, port: target })
+          let body = ''
+          socket.on('data', chunk => {
+            body += chunk
+          })
+          socket.once('end', () => resolve(body))
+          socket.once('error', error => resolve(error.code))
+        })
+      const named = await new Promise(resolve => {
+        const req = require('node:http').get(`http://localhost:${allowedPort}/`, res => {
+          const chunks = []
+          res.on('data', chunk => chunks.push(chunk))
+          res.on('end', () => resolve(Buffer.concat(chunks).toString()))
+        })
+        req.on('error', error => resolve(error.code))
+      })
+      return {
+        named,
+        raw: await hit('1.1.1.1', 443),
+        other: await hit('example.org', 443)
+      }
+    },
+    {
+      ssrf: () => true,
+      hosts: [{ host: 'localhost', port: String(port) }],
+      allow: { permissions },
+      timeout: 10000,
+      throwError: false
+    }
+  )
+
+  const result = await fn(port)
+  t.true(result.outgoing)
+  t.deepEqual(result.value, {
+    named: 'ok',
+    raw: 'EOUTGOINGREQUEST',
+    other: 'EOUTGOINGREQUEST'
+  })
+})
+
+test('hosts requires ssrf', t => {
+  const error = t.throws(() =>
+    isolatedFunction('() => 1', { hosts: [{ host: 'example.com', port: '443' }] })
+  )
+  t.is(error.message, 'Expected `ssrf` when `hosts` is set')
+})

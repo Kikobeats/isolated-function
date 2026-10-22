@@ -93,9 +93,37 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
 
   const isolatedFunction = (
     snippet,
-    { timeout, memory, throwError = true, allow = {}, esbuild: callEsbuild, slot, host, ssrf } = {}
+    {
+      timeout,
+      memory,
+      throwError = true,
+      allow = {},
+      esbuild: callEsbuild,
+      slot,
+      host,
+      ssrf,
+      hosts
+    } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
+    if (hosts !== undefined) {
+      if (
+        !Array.isArray(hosts) ||
+        hosts.some(
+          entry =>
+            !entry ||
+            typeof entry.host !== 'string' ||
+            entry.host.length === 0 ||
+            typeof entry.port !== 'string' ||
+            !/^\d+$/.test(entry.port)
+        )
+      ) {
+        throw new TypeError('Expected `hosts` to be { host, port } pairs')
+      }
+      if (hosts.length > 0 && typeof ssrf !== 'function') {
+        throw new TypeError('Expected `ssrf` when `hosts` is set')
+      }
+    }
     if (slot !== undefined) {
       if (typeof slot !== 'string') throw new TypeError('Expected `slot` to be a string')
       if (typeof snippet !== 'string' || snippet.split(SLOT).length !== 2) {
@@ -117,7 +145,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       try {
         total = timeSpan()
         const compiled = await compilePromise
-        const dial = checksDials ? startDialCheck(ssrf) : undefined
+        const dial = checksDials ? startDialCheck(ssrf, hosts) : undefined
         const ipcHost = dial ? { ...host, [SSRF_METHOD]: dial.answer } : host
         const prelude = `${dial ? dial.prelude : ''}globalThis.__isolated_args=${JSON.stringify(
           JSON.stringify(args)
@@ -158,13 +186,11 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           phases: roundMs(Object.entries(result.phases))
         })
 
-        return isFulfilled
-          ? { isFulfilled, value, profiling: result, logging }
-          : throwError
-            ? (() => {
-                throw deserializeError(value)
-              })()
-            : { isFulfilled: false, value: deserializeError(value), profiling: result, logging }
+        const reportedValue = isFulfilled ? value : deserializeError(value)
+        if (!isFulfilled && throwError) throw reportedValue
+        const reported = { isFulfilled, value: reportedValue, profiling: result, logging }
+        if (dial?.blocked()) reported.outgoing = true
+        return reported
       } catch (error) {
         debug.error(serializeError(error))
         const profiling = { phases: { total: total() } }

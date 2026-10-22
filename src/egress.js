@@ -1,6 +1,7 @@
 'use strict'
 
 const METHOD = '__ssrf'
+const HOST_DENIED = '*'
 const NESTED = new Set(['child-process', 'child_process', 'worker'])
 
 /* The isolate can read its own heap, so the signing key stays on the host.
@@ -33,7 +34,7 @@ const signedAnswer = (privateKey, ssrf) => (address, port) => {
 }
 
 /* install and dialPayload are copied in as source. The child cannot require this file. */
-const install = (method, publicKey, encode) => {
+const install = (method, publicKey, encode, hosts, denied) => {
   const net = require('node:net')
   const dns = require('node:dns')
   const { verify, createPublicKey } = require('node:crypto')
@@ -96,10 +97,36 @@ const install = (method, publicKey, encode) => {
       }
     })
 
-  const refused = host =>
-    Object.assign(new Error(`The url \`${host}\` is not resolving to unicast IP address`), {
-      code: 'ERESERVEDADDRESSRANGE'
-    })
+  const allowed = new Set(
+    (Array.isArray(hosts) ? hosts : []).map(entry => `${entry.host}\0${entry.port}`)
+  )
+  const limited = allowed.size > 0
+
+  const refused = (host, code = 'ERESERVEDADDRESSRANGE') =>
+    Object.assign(
+      new Error(
+        code === 'ERESERVEDADDRESSRANGE'
+          ? `The url \`${host}\` is not resolving to unicast IP address`
+          : `The url \`${host}\` is a cross-origin request`
+      ),
+      { code }
+    )
+
+  const loopback = value => {
+    const host = String(value).toLowerCase()
+    return host === '127.0.0.1' || host === '::1' || host === '::ffff:127.0.0.1'
+  }
+
+  const dialKey = (host, port) => {
+    const parsed = portOf(port)
+    if (parsed == null || typeof host !== 'string' || host.length === 0) return ''
+    const authority = net.isIP(host) === 6 ? `[${host}]` : host
+    try {
+      return `${new URL(`http://${authority}`).hostname}\0${parsed}`
+    } catch {
+      return ''
+    }
+  }
 
   const describe = args => {
     const head = args[0]
@@ -139,8 +166,20 @@ const install = (method, publicKey, encode) => {
     const fail = () => {
       if (!this.destroyed) this.destroy(refused(host))
     }
+    const block = () => {
+      this.connecting = true
+      const stop = () => {
+        if (!this.destroyed) this.destroy(refused(host, 'EOUTGOINGREQUEST'))
+      }
+      ask(denied, 0).then(stop, stop)
+      return this
+    }
 
     if (path) return deny()
+
+    if (limited && net.isIP(host) && !loopback(host)) return block()
+
+    if (limited && !net.isIP(host) && !allowed.has(dialKey(host, port))) return block()
 
     if (net.isIP(host)) {
       // The caller can write as soon as connect() returns. Buffer that write
@@ -184,10 +223,10 @@ const install = (method, publicKey, encode) => {
   })
 }
 
-const preludeFor = publicKey =>
+const preludeFor = (publicKey, hosts) =>
   `;(${install.toString()})(${JSON.stringify(METHOD)},${JSON.stringify(
     publicKey
-  )},${dialPayload.toString()});\n`
+  )},${dialPayload.toString()},${JSON.stringify(hosts ?? [])},${JSON.stringify(HOST_DENIED)});\n`
 
 const assertCanCheck = (ssrf, { permissions = [], hostMethods } = {}) => {
   if (ssrf !== undefined && typeof ssrf !== 'function') {
@@ -207,9 +246,18 @@ const assertCanCheck = (ssrf, { permissions = [], hostMethods } = {}) => {
   }
 }
 
-const start = ssrf => {
+const start = (ssrf, hosts) => {
   const { privateKey, publicKey } = createKeys()
-  return { prelude: preludeFor(publicKey), answer: signedAnswer(privateKey, ssrf) }
+  const decide = signedAnswer(privateKey, ssrf)
+  let seen = false
+  const answer = (address, port) => {
+    if (address === HOST_DENIED) {
+      seen = true
+      return signDecision(privateKey, address, port, false)
+    }
+    return decide(address, port)
+  }
+  return { prelude: preludeFor(publicKey, hosts), answer, blocked: () => seen }
 }
 
 module.exports = { METHOD, assertCanCheck, start }
