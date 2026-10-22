@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.21 (2026-10-22)
+
+
+### Bug Fixes
+
+* limit isolate dials to named hosts ([#94](https://github.com/Kikobeats/isolated-function/issues/94)) ([4cf0d94](https://github.com/Kikobeats/isolated-function/commit/4cf0d9408fcb501d8b2634c53b0d712095c3b998))
+
 ### 0.2.20 (2026-10-22)
 
 
