@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.20 (2026-10-22)
+
+
+### Bug Fixes
+
+* cap isolate address space and report an external kill as out of memory ([#95](https://github.com/Kikobeats/isolated-function/issues/95)) ([2e74cae](https://github.com/Kikobeats/isolated-function/commit/2e74caedeac42416236508a3e9f22d7a576ca58d))
+
 ### 0.2.19 (2026-10-14)
 
 
