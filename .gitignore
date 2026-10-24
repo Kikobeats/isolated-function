@@ -34,3 +34,6 @@ coverage
 ############################
 .env
 .envrc
+benchmark-output.json
+decision.tsv
+decisions.tsv
