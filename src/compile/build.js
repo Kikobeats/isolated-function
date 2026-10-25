@@ -12,6 +12,16 @@ const MINIFY = (() => {
       }
 })()
 
+// @cloudflare/puppeteer vendors the whole of rxjs. Keep the operators the isolate actually calls.
+const PUPPETEER_RXJS = {
+  name: 'puppeteer-rxjs',
+  setup (build) {
+    build.onResolve({ filter: /(?:^|\/)third_party\/rxjs\/rxjs\.js$/ }, () => ({
+      path: require.resolve('./rxjs-runtime.cjs')
+    }))
+  }
+}
+
 module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts } = {}) =>
   esbuild.build({
     stdin: {
@@ -26,5 +36,6 @@ module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts } = {}) =
     target: 'node24',
     nodePaths,
     ...MINIFY,
-    ...esbuildOpts
+    ...esbuildOpts,
+    plugins: [PUPPETEER_RXJS, ...(esbuildOpts?.plugins ?? [])]
   })

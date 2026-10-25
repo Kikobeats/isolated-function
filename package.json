@@ -126,7 +126,8 @@
   },
   "standard": {
     "ignore": [
-      "docs/static/main.min.js"
+      "docs/static/main.min.js",
+      "src/compile/rxjs-runtime.cjs"
     ]
   },
   "tsd": {
