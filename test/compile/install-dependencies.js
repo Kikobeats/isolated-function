@@ -1,7 +1,7 @@
 'use strict'
 
 const { mkdtempSync, readFileSync, rmSync } = require('fs')
-const { execSync } = require('child_process')
+const { execSync, spawnSync } = require('child_process')
 const { tmpdir } = require('os')
 const { join } = require('path')
 const test = require('ava')
@@ -172,6 +172,37 @@ test('install into an empty directory creates its package.json', async t => {
 
   const { dependencies } = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'))
   t.deepEqual(dependencies, { 'is-number': '7.0.0' })
+  t.is(readVersion(cwd, 'is-number'), '7.0.0')
+})
+
+test('a repeated exact install does not ask the registry again', async t => {
+  t.timeout(30_000)
+  const cwd = freshDir(t)
+
+  await installDependencies({ dependencies: ['is-number@7.0.0'], cwd })
+
+  const child = spawnSync(
+    process.execPath,
+    [
+      '-e',
+      `
+        const install = require(${JSON.stringify(
+          require.resolve('../../src/compile/install-dependencies')
+        )})
+        const cwd = ${JSON.stringify(cwd)}
+        process.env.npm_config_registry = 'http://127.0.0.1:9'
+        install({ dependencies: ['is-number@7.0.0'], cwd }).then(() => {
+          return install({ dependencies: ['is-number@6.0.0'], cwd }).then(
+            () => process.exit(3),
+            error => process.exit(error.code === 'ENETWORK' ? 0 : 1)
+          )
+        }).catch(() => process.exit(2))
+      `
+    ],
+    { encoding: 'utf8' }
+  )
+
+  t.is(child.status, 0, child.stderr)
   t.is(readVersion(cwd, 'is-number'), '7.0.0')
 })
 

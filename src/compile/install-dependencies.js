@@ -147,10 +147,39 @@ const validateDependencies = (dependencies, allowed) => {
   }
 }
 
+const exactVersion = spec => {
+  const name = extractPackageName(spec)
+  const rest = spec.slice(name.length + 1)
+  const version = rest.startsWith('npm:') ? rest.slice(rest.lastIndexOf('@') + 1) : rest
+  return /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version) ? version : null
+}
+
+const alreadyInstalled = (cwd, install) => {
+  if (install.length === 0) return false
+  for (const spec of install) {
+    const version = exactVersion(spec)
+    if (!version) return false
+    try {
+      const installed = JSON.parse(
+        readFileSync(
+          path.join(cwd, 'node_modules', extractPackageName(spec), 'package.json'),
+          'utf8'
+        )
+      ).version
+      if (installed !== version) return false
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
 module.exports = async ({ dependencies, cwd, allow = {} }) => {
   validateDependencies(dependencies, allow.dependencies)
   const { install } = planDependencies(dependencies)
   ensurePackageJson(cwd)
+  // An exact version already in this directory does not need the registry. A tag or a range still resolves.
+  if (alreadyInstalled(cwd, install)) return
   return add(install, { dir: cwd, minReleaseAge: 0 })
 }
 
