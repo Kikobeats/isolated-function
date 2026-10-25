@@ -375,7 +375,7 @@ Creates an isolated-function instance. All functions created from the same insta
 Type: `string`<br>
 Default: `path.join(os.tmpdir(), 'isolated-fn-deps')`
 
-The directory used for installing code dependencies. Dependencies are installed once and reused across invocations, so only the first call that requires a given package pays the install cost.
+The directory used for installing code dependencies. A package set that was already linked on this machine is reused, including when this directory is empty. Only the first link pays the install cost. A tag such as `@latest` is resolved once per process, then that tree is reused.
 
 ```js
 const isolatedFunction = require('isolated-function')({

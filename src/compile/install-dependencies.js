@@ -1,5 +1,6 @@
 'use strict'
 
+const { createHash } = require('crypto')
 const { globSync, readFileSync, realpathSync, writeFileSync } = require('fs')
 const { add } = require('upm')
 const path = require('path')
@@ -147,6 +148,64 @@ const validateDependencies = (dependencies, allowed) => {
   }
 }
 
+const TREE_ROOT = path.join(require('os').tmpdir(), 'isolated-fn-trees')
+
+const treeDir = install =>
+  path.join(TREE_ROOT, createHash('sha256').update(install.slice().sort().join('\n')).digest('hex'))
+
+const requestedVersion = spec => {
+  const name = extractPackageName(spec)
+  const rest = spec.slice(name.length + 1)
+  if (rest.startsWith('npm:')) return rest.slice(rest.lastIndexOf('@') + 1)
+  return rest
+}
+
+const latestSeen = new Map()
+
+const registryLatest = async name => {
+  if (latestSeen.has(name)) return latestSeen.get(name)
+  const registry = (process.env.npm_config_registry || 'https://registry.npmjs.org').replace(
+    /\/$/,
+    ''
+  )
+  const response = await fetch(`${registry}/${name.replace('/', '%2f')}/latest`, {
+    headers: { accept: 'application/json' }
+  })
+  if (!response.ok) return null
+  const body = await response.json()
+  if (typeof body.version !== 'string') return null
+  latestSeen.set(name, body.version)
+  return body.version
+}
+
+const treeMatches = async (dir, install) => {
+  if (install.length === 0) return false
+  try {
+    JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'))
+  } catch {
+    return false
+  }
+  for (const spec of install) {
+    const name = extractPackageName(spec)
+    let installed
+    try {
+      installed = JSON.parse(
+        readFileSync(path.join(dir, 'node_modules', name, 'package.json'), 'utf8')
+      ).version
+    } catch {
+      return false
+    }
+    const requested = requestedVersion(spec)
+    if (requested === 'latest') {
+      const latest = await registryLatest(name)
+      if (latest !== installed) return false
+      continue
+    }
+    if (installed !== requested) return false
+  }
+  return true
+}
+
 module.exports = async ({ dependencies, cwd, allow = {} }) => {
   validateDependencies(dependencies, allow.dependencies)
   const { install } = planDependencies(dependencies)
@@ -158,3 +217,5 @@ module.exports.validateDependencies = validateDependencies
 module.exports.extractPackageName = extractPackageName
 module.exports.planDependencies = planDependencies
 module.exports.bundleAliases = bundleAliases
+module.exports.treeDir = treeDir
+module.exports.treeMatches = treeMatches

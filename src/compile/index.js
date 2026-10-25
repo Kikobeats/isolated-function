@@ -1,6 +1,6 @@
 'use strict'
 
-const { mkdirSync, readFileSync } = require('fs')
+const { mkdirSync, readFileSync, symlinkSync } = require('fs')
 const path = require('path')
 
 const transformDependencies = require('./transform-dependencies')
@@ -55,13 +55,24 @@ module.exports = async (
     mkdirSync(tmpdir, { recursive: true })
   }
 
+  let cwd = allDependencies.length ? tmpdir : process.cwd()
+
   if (dependencies.length) {
     const elapsed = timeSpan()
-    await enqueueInstall(tmpdir, dependencies, allow)
+    const { install } = installDependencies.planDependencies(dependencies)
+    const dir = installDependencies.treeDir(install)
+    mkdirSync(dir, { recursive: true })
+    if (!(await installDependencies.treeMatches(dir, install))) {
+      await enqueueInstall(dir, dependencies, allow)
+    }
     phases.install = elapsed()
+    cwd = dir
+    try {
+      symlinkSync(path.join(dir, 'node_modules'), path.join(tmpdir, 'node_modules'))
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+    }
   }
-
-  const cwd = allDependencies.length ? tmpdir : process.cwd()
   const alias = { ...installDependencies.bundleAliases(cwd, plan.requireAs), ...esbuild?.alias }
   const elapsed = timeSpan()
   const result = await build({
