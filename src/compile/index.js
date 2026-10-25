@@ -1,6 +1,6 @@
 'use strict'
 
-const { mkdirSync, readFileSync, symlinkSync } = require('fs')
+const { lstatSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync } = require('fs')
 const path = require('path')
 
 const transformDependencies = require('./transform-dependencies')
@@ -13,6 +13,39 @@ const build = require('./build')
 const DEFAULT_TMPDIR = path.join(require('os').tmpdir(), 'isolated-fn-deps')
 
 const installQueues = new Map()
+
+const linkOne = (source, dest) => {
+  try {
+    symlinkSync(source, dest)
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error
+  }
+}
+
+const publishTree = (tree, tmpdir) => {
+  if (tree === tmpdir) return
+  const destRoot = path.join(tmpdir, 'node_modules')
+  try {
+    if (lstatSync(destRoot).isSymbolicLink()) rmSync(destRoot)
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  mkdirSync(destRoot, { recursive: true })
+  const sourceRoot = path.join(tree, 'node_modules')
+  for (const name of readdirSync(sourceRoot)) {
+    if (name.startsWith('.')) continue
+    const source = path.join(sourceRoot, name)
+    if (name.startsWith('@')) {
+      const scopeDest = path.join(destRoot, name)
+      mkdirSync(scopeDest, { recursive: true })
+      for (const child of readdirSync(source)) {
+        linkOne(path.join(source, child), path.join(scopeDest, child))
+      }
+      continue
+    }
+    linkOne(source, path.join(destRoot, name))
+  }
+}
 
 const enqueueInstall = (tmpdir, dependencies, allow) => {
   const pending = installQueues.get(tmpdir) || Promise.resolve()
@@ -67,11 +100,7 @@ module.exports = async (
     }
     phases.install = elapsed()
     cwd = dir
-    try {
-      symlinkSync(path.join(dir, 'node_modules'), path.join(tmpdir, 'node_modules'))
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error
-    }
+    publishTree(dir, tmpdir)
   }
   const alias = { ...installDependencies.bundleAliases(cwd, plan.requireAs), ...esbuild?.alias }
   const elapsed = timeSpan()
