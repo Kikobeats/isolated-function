@@ -20,7 +20,7 @@ const {
 const { METHOD: SSRF_METHOD, assertCanCheck, start: startDialCheck } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
-const { debug } = require('./debug')
+const { debug, flatten } = require('./debug')
 
 const createError = ({ name, message, ...props }) => {
   const error = new Error(message)
@@ -214,11 +214,14 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             total: total()
           }
         }
-        debug('node', {
-          ...result,
-          cpu: Math.round(result.cpu),
-          phases: roundMs(Object.entries(result.phases))
-        })
+        debug(
+          'node',
+          flatten({
+            ...result,
+            cpu: Math.round(result.cpu),
+            phases: roundMs(Object.entries(result.phases))
+          })
+        )
 
         const reportedValue = isFulfilled ? value : deserializeError(value)
         if (!isFulfilled && throwError) throw reportedValue
