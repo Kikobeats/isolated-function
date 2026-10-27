@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.23 (2026-10-27)
+
+
+### Bug Fixes
+
+* log memory and phases as flat fields ([#101](https://github.com/Kikobeats/isolated-function/issues/101)) ([e2f87b5](https://github.com/Kikobeats/isolated-function/commit/e2f87b51cbbb82f6d6e00deb9dbd29f0a26a9a43))
+
 ### 0.2.22 (2026-10-26)
 
 ### 0.2.21 (2026-10-22)
