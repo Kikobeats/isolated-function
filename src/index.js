@@ -2,6 +2,7 @@
 
 const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
+const { flattie } = require('flattie')
 const { Readable } = require('node:stream')
 const { existsSync } = require('node:fs')
 const { rm } = require('fs/promises')
@@ -214,11 +215,14 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
             total: total()
           }
         }
-        debug('node', {
-          ...result,
-          cpu: Math.round(result.cpu),
-          phases: roundMs(Object.entries(result.phases))
-        })
+        debug(
+          'node',
+          flattie({
+            ...result,
+            cpu: Math.round(result.cpu),
+            phases: roundMs(Object.entries(result.phases))
+          })
+        )
 
         const reportedValue = isFulfilled ? value : deserializeError(value)
         if (!isFulfilled && throwError) throw reportedValue
