@@ -2,6 +2,7 @@
 
 const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
+const { flattie } = require('flattie')
 const { Readable } = require('node:stream')
 const { existsSync } = require('node:fs')
 const { rm } = require('fs/promises')
@@ -20,7 +21,7 @@ const {
 const { METHOD: SSRF_METHOD, assertCanCheck, start: startDialCheck } = require('./egress')
 const { attach: attachHost } = require('./host')
 const compile = require('./compile')
-const { debug, flatten } = require('./debug')
+const { debug } = require('./debug')
 
 const createError = ({ name, message, ...props }) => {
   const error = new Error(message)
@@ -216,7 +217,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         }
         debug(
           'node',
-          flatten({
+          flattie({
             ...result,
             cpu: Math.round(result.cpu),
             phases: roundMs(Object.entries(result.phases))

@@ -16,11 +16,4 @@ const duration = async (name, fn, props) => {
     })
 }
 
-const flatten = (object, prefix = '') =>
-  Object.entries(object).reduce((fields, [key, value]) => {
-    const name = prefix + key
-    if (value !== null && typeof value === 'object') { Object.assign(fields, flatten(value, `${name}.`)) } else fields[name] = value
-    return fields
-  }, {})
-
-module.exports = { debug, duration, flatten }
+module.exports = { debug, duration }

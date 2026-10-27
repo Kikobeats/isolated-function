@@ -4,25 +4,6 @@ const { default: test } = require('ava')
 const $ = require('tinyspawn')
 const path = require('node:path')
 
-const { flatten } = require('../src/debug')
-
-test('nested fields become dotted keys', t => {
-  t.deepEqual(flatten({ cpu: 12, memory: { used: 1024, heap: 512 }, phases: { run: 3 } }), {
-    cpu: 12,
-    'memory.used': 1024,
-    'memory.heap': 512,
-    'phases.run': 3
-  })
-})
-
-test('null and scalar fields are kept as they are', t => {
-  t.deepEqual(flatten({ size: 0, label: 'node', missing: null }), {
-    size: 0,
-    label: 'node',
-    missing: null
-  })
-})
-
 test('the node log line prints memory and phases as numbers', async t => {
   const script = `require(${JSON.stringify(
     path.join(__dirname, '..')
