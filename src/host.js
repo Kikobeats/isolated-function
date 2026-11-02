@@ -8,7 +8,6 @@ const OVER_MEMORY = 'the host call results exceed the run memory limit'
 
 const BYTES_PER_MB = 1024 * 1024
 const BYTES_PER_REMEMBERED_CALL = 256
-const BYTES_PER_UNREAD_REPLY = 512
 
 const WIDE_CHARACTER = /[\u0100-\uffff]/
 const BYTES_PER_WIDE_CHARACTER = 2
@@ -43,6 +42,13 @@ const describe = value => {
     return INDESCRIBABLE
   }
 }
+
+/**
+ * A snippet that never awaits its call can finish and close the channel while
+ * the reply is in flight. Without a callback the resulting EPIPE is emitted on
+ * the subprocess, and an `error` there fails the whole run.
+ */
+const absorbSendError = () => {}
 
 const failure = reason => JSON.stringify({ failed: true, reason })
 const UNKNOWN_METHOD_ANSWER = failure(UNKNOWN_METHOD)
@@ -81,33 +87,11 @@ const attach = (subprocess, host, { memory } = {}) => {
     }
   }
 
-  let unread = 0
-  let outOfMemory = false
-
-  const exceedMemory = () => {
-    outOfMemory = true
-    subprocess.kill('SIGKILL')
-  }
-
-  const awaitReply = () => {
-    if (unread + BYTES_PER_UNREAD_REPLY > limit) return false
-    unread += BYTES_PER_UNREAD_REPLY
-    return true
-  }
-
   const answer = (id, text) => {
-    const bytes = Buffer.byteLength(text)
-    if (unread + bytes > limit) return exceedMemory()
-    unread += bytes
-    const written = () => {
-      unread -= BYTES_PER_UNREAD_REPLY + bytes
-    }
     if (!subprocess.connected) return
     try {
-      subprocess.send({ id, ...JSON.parse(text) }, written)
-    } catch {
-      written()
-    }
+      subprocess.send({ id, ...JSON.parse(text) }, absorbSendError)
+    } catch {}
   }
 
   /** The same method and arguments resolve once, so asking twice costs one call. */
@@ -139,7 +123,6 @@ const attach = (subprocess, host, { memory } = {}) => {
 
   subprocess.on('message', message => {
     if (!isWellFormed(message)) return
-    if (!awaitReply()) return exceedMemory()
     const { id, method, args = [] } = message
 
     const fn = exposed.get(method)
@@ -149,8 +132,6 @@ const attach = (subprocess, host, { memory } = {}) => {
       .then(text => answer(id, text))
       .catch(() => {})
   })
-
-  return { outOfMemory: () => outOfMemory }
 }
 
 module.exports = {

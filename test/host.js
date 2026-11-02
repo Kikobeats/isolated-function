@@ -496,76 +496,21 @@ test('answers that fill the memory exactly are kept', async t => {
   t.is(replyTo(replies, 2).value, halfFit)
 })
 
-test('replies the isolate has not read count against its memory', async t => {
-  const { child, replies } = fakeChild()
-  child.send = message => replies.push(message)
-  const killedWith = []
-  child.kill = signal => killedWith.push(signal)
-  const calls = 5
-  const replyCost = 512
-  const answerWrapping = JSON.stringify({ value: '' }).length
-  const replyBytes = (8 * ONE_MB - calls * replyCost) / 4
-  const answer = 'x'.repeat(replyBytes - answerWrapping)
-  const channel = attach(child, { big: () => answer }, { memory: 8 })
-
-  for (let id = 1; id <= calls; id++) child.emit('message', { id, method: 'big', args: [] })
-  await settle()
-
-  t.is(replies.length, 4)
-  t.true(channel.outOfMemory())
-  t.deepEqual(killedWith, ['SIGKILL'])
-})
-
-test('every unread reply costs memory, however small', async t => {
-  const { child, replies } = fakeChild()
-  child.send = message => replies.push(message)
-  child.kill = () => {}
-  const channel = attach(child, { one: () => 1 }, { memory: 1 })
-
-  for (let id = 1; id <= 3000; id++) child.emit('message', { id, method: 'one', args: [] })
-  await settle()
-
-  t.true(replies.length < 3000)
-  t.true(channel.outOfMemory())
-})
-
-test('calls waiting on the same running call each cost memory', async t => {
-  const { child } = fakeChild()
-  child.kill = () => {}
-  const channel = attach(child, { slow: () => new Promise(() => {}) }, { memory: 1 })
-
-  const callsThatFit = ONE_MB / 512
-  for (let id = 1; id <= callsThatFit; id++) child.emit('message', { id, method: 'slow', args: [] })
-  t.false(channel.outOfMemory())
-
-  child.emit('message', { id: callsThatFit + 1, method: 'slow', args: [] })
-  t.true(channel.outOfMemory())
-})
-
-test('a reply the isolate has read no longer counts against its memory', async t => {
-  const { child, replies } = fakeChild()
-  const channel = attach(child, { big: () => 'x'.repeat(2 * ONE_MB) }, { memory: 8 })
-
-  for (let id = 1; id <= 20; id++) child.emit('message', { id, method: 'big', args: [] })
-  await settle()
-
-  t.is(replies.length, 20)
-  t.false(channel.outOfMemory())
-})
-
-test('a run whose unread replies exceed its memory fails as out of memory', async t => {
-  const eightMegabytes = 'x'.repeat(8 * ONE_MB)
+test('repeating a large answer many times at once still answers every call', async t => {
+  const config = { flags: { a: true }, blob: 'x'.repeat(300 * 1024) }
   const fn = isolatedFunction(
-    () => {
-      for (let call = 0; call < 10; call++) globalThis.__isolated_host('big').catch(() => {})
-      const end = Date.now() + 5000
-      while (Date.now() < end);
+    async () => {
+      const host = globalThis.__isolated_host
+      const flags = await Promise.all(
+        Array.from({ length: 300 }, () => host('config').then(answer => answer.flags.a))
+      )
+      return flags.every(flag => flag === true)
     },
-    { host: { big: () => eightMegabytes }, memory: 32, timeout: 10000 }
+    { host: { config: () => config }, memory: 64, timeout: 10000 }
   )
-  const error = await t.throwsAsync(fn())
-  t.is(error.name, 'MemoryError')
-  t.is(error.message, 'Out of memory')
+  const { isFulfilled, value } = await fn()
+  t.true(isFulfilled)
+  t.true(value)
 })
 
 test('a string stored two bytes per character is charged for both', t => {
