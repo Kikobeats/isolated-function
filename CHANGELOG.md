@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.24 (2026-11-02)
+
+
+### Bug Fixes
+
+* bound what the host keeps per run ([#102](https://github.com/Kikobeats/isolated-function/issues/102)) ([f6375f6](https://github.com/Kikobeats/isolated-function/commit/f6375f640076525786a4f5ebd49ea4f915ae88e4)), closes [#88](https://github.com/Kikobeats/isolated-function/issues/88)
+
 ### 0.2.23 (2026-10-27)
 
 
