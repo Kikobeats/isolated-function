@@ -360,8 +360,9 @@ const fakeChild = () => {
   const child = new EventEmitter()
   const replies = []
   child.connected = true
-  child.send = message => {
+  child.send = (message, written) => {
     replies.push(message)
+    written()
   }
   return { child, replies }
 }
@@ -378,7 +379,7 @@ const retainedBytes = ({ host, argsOf, calls, memory }) =>
       const { attach } = require(${JSON.stringify(require.resolve('../src/host'))})
       const child = new EventEmitter()
       child.connected = true
-      child.send = () => {}
+      child.send = (message, written) => written()
       attach(child, { call: ${host} }, { memory: ${memory} })
       const argsOf = ${argsOf}
       global.gc()
@@ -491,6 +492,43 @@ test('a result that fills the memory exactly is kept', async t => {
   await settle()
 
   t.is(replyTo(replies, 1).value, exactFit)
+})
+
+test('replies the isolate has not read count against its memory', async t => {
+  const { child, replies } = fakeChild()
+  const unread = []
+  child.send = (message, written) => {
+    replies.push(message)
+    unread.push(written)
+  }
+  const twoMegabytes = 'x'.repeat(2 * ONE_MB)
+  attach(child, { big: () => twoMegabytes }, { memory: 8 })
+
+  for (let id = 1; id <= 5; id++) child.emit('message', { id, method: 'big', args: [] })
+  await settle()
+
+  t.deepEqual(
+    replies.map(reply => reply.failed === true),
+    [false, false, false, true, true]
+  )
+
+  for (const written of unread.splice(0)) written()
+  child.emit('message', { id: 6, method: 'big', args: [] })
+  await settle()
+
+  t.is(replyTo(replies, 6).value, twoMegabytes)
+})
+
+test('a string stored two bytes per character is charged for both', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: "id => 'x'.repeat(64 * 1024) + 'Ā' + id",
+      argsOf: 'id => [id]',
+      calls: 512,
+      memory: MEMORY_MB
+    })
+  )
 })
 
 test('a run without memory keeps every result', async t => {

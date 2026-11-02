@@ -9,6 +9,11 @@ const OVER_MEMORY = 'the host call results exceed the run memory limit'
 const BYTES_PER_MB = 1024 * 1024
 const BYTES_PER_REMEMBERED_CALL = 256
 
+const WIDE_CHARACTER = /[\u0100-\uffff]/
+const BYTES_PER_WIDE_CHARACTER = 2
+
+const storedBytes = text => (WIDE_CHARACTER.test(text) ? BYTES_PER_WIDE_CHARACTER : 1) * text.length
+
 const digest = call => createHash('sha256').update(call).digest('base64url')
 
 /**
@@ -37,13 +42,6 @@ const describe = value => {
     return INDESCRIBABLE
   }
 }
-
-/**
- * A snippet that never awaits its call can finish and close the channel while
- * the reply is in flight. Without a callback the resulting EPIPE is emitted on
- * the subprocess, and an `error` there fails the whole run.
- */
-const absorbSendError = () => {}
 
 const failure = reason => JSON.stringify({ failed: true, reason })
 const UNKNOWN_METHOD_ANSWER = failure(UNKNOWN_METHOD)
@@ -82,11 +80,22 @@ const attach = (subprocess, host, { memory } = {}) => {
     }
   }
 
+  let unwritten = 0
+
   const answer = (id, text) => {
     if (!subprocess.connected) return
+    const bytes = Buffer.byteLength(text)
+    const fits = unwritten + bytes <= limit
+    const charged = fits ? bytes : 0
+    const written = () => {
+      unwritten -= charged
+    }
+    unwritten += charged
     try {
-      subprocess.send({ id, ...JSON.parse(text) }, absorbSendError)
-    } catch {}
+      subprocess.send({ id, ...JSON.parse(fits ? text : OVER_MEMORY_ANSWER) }, written)
+    } catch {
+      written()
+    }
   }
 
   /** The same method and arguments resolve once, so asking twice costs one call. */
@@ -102,7 +111,7 @@ const attach = (subprocess, host, { memory } = {}) => {
     const seen = answers.get(key)
     if (seen !== undefined) return seen
 
-    const argumentBytes = Buffer.byteLength(call)
+    const argumentBytes = storedBytes(call)
     if (!take(BYTES_PER_REMEMBERED_CALL + argumentBytes)) return Promise.resolve(OVER_MEMORY_ANSWER)
 
     const pending = Promise.resolve()
@@ -110,7 +119,7 @@ const attach = (subprocess, host, { memory } = {}) => {
       .then(serialize, error => failure(describe(error)))
       .then(text => {
         held -= argumentBytes
-        return take(Buffer.byteLength(text)) ? text : OVER_MEMORY_ANSWER
+        return take(storedBytes(text)) ? text : OVER_MEMORY_ANSWER
       })
     answers.set(key, pending)
     return pending
