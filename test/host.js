@@ -744,3 +744,17 @@ test('a snippet that closes the channel still finishes its run', async t => {
   )
   t.is(value, 'done')
 })
+
+test('a call left unawaited does not hold the run open until the host answers', async t => {
+  const started = Date.now()
+  const { value } = await run(
+    async () => {
+      globalThis.__isolated_host('slow')
+      return 'done'
+    },
+    { slow: () => new Promise(resolve => setTimeout(resolve, 4000)) },
+    { timeout: 10000 }
+  )
+  t.is(value, 'done')
+  t.true(Date.now() - started < 3000, `${Date.now() - started}ms`)
+})
