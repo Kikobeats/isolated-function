@@ -450,8 +450,8 @@ test('wide characters are charged for the bytes they take', t => {
   withinMemory(
     t,
     retainedBytes({
-      host: 'text => text',
-      argsOf: "id => ['語'.repeat(512 * 1024) + id]",
+      host: "id => '語'.repeat(512 * 1024) + id",
+      argsOf: 'id => [id]',
       calls: 40,
       memory: MEMORY_MB
     })
