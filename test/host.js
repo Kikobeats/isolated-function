@@ -461,7 +461,10 @@ test('remembering a call costs memory even when its result is empty', async t =>
   await settle()
 
   t.is(calls, callsThatFit)
-  t.deepEqual(replyTo(replies, callsThatFit), refused(callsThatFit))
+  t.deepEqual(
+    replies.filter(reply => reply.failed),
+    [refused(callsThatFit)]
+  )
 })
 
 test('the memory option reaches the host channel', async t => {
