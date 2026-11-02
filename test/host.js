@@ -531,6 +531,16 @@ test('every unread reply costs memory, however small', async t => {
   t.true(channel.outOfMemory())
 })
 
+test('calls waiting on the same running call each cost memory', async t => {
+  const { child } = fakeChild()
+  child.kill = () => {}
+  const channel = attach(child, { slow: () => new Promise(() => {}) }, { memory: 1 })
+
+  for (let id = 1; id <= 3000; id++) child.emit('message', { id, method: 'slow', args: [] })
+
+  t.true(channel.outOfMemory())
+})
+
 test('a reply the isolate has read no longer counts against its memory', async t => {
   const { child, replies } = fakeChild()
   const channel = attach(child, { big: () => 'x'.repeat(2 * ONE_MB) }, { memory: 8 })
@@ -596,8 +606,10 @@ test('remembering a call costs memory even when its result is empty', async t =>
   )
 
   const callsAtMostThatFit = ONE_MB / 256
+  const batch = 1000
   for (let id = 0; id < callsAtMostThatFit; id++) {
     child.emit('message', { id, method: 'ping', args: [id] })
+    if (id % batch === 0) await settle()
   }
   await settle()
 

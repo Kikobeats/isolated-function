@@ -89,14 +89,20 @@ const attach = (subprocess, host, { memory } = {}) => {
     subprocess.kill('SIGKILL')
   }
 
+  const awaitReply = () => {
+    if (unread + BYTES_PER_UNREAD_REPLY > limit) return false
+    unread += BYTES_PER_UNREAD_REPLY
+    return true
+  }
+
   const answer = (id, text) => {
-    if (!subprocess.connected) return
-    const bytes = BYTES_PER_UNREAD_REPLY + Buffer.byteLength(text)
+    const bytes = Buffer.byteLength(text)
     if (unread + bytes > limit) return exceedMemory()
     unread += bytes
     const written = () => {
-      unread -= bytes
+      unread -= BYTES_PER_UNREAD_REPLY + bytes
     }
+    if (!subprocess.connected) return written()
     try {
       subprocess.send({ id, ...JSON.parse(text) }, written)
     } catch {
@@ -133,6 +139,7 @@ const attach = (subprocess, host, { memory } = {}) => {
 
   subprocess.on('message', message => {
     if (!isWellFormed(message)) return
+    if (!awaitReply()) return exceedMemory()
     const { id, method, args = [] } = message
 
     const fn = exposed.get(method)
