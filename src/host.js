@@ -94,6 +94,15 @@ const attach = (subprocess, host, { memory } = {}) => {
     } catch {}
   }
 
+  /**
+   * An answer refused for space is not remembered: what else is running when it
+   * arrives decides the refusal, so a later ask runs the method again.
+   */
+  const forget = key => {
+    held -= BYTES_PER_REMEMBERED_CALL
+    answers.delete(key)
+  }
+
   /** The same method and arguments resolve once, so asking twice costs one call. */
   const resolve = (fn, method, args) => {
     let call
@@ -115,7 +124,9 @@ const attach = (subprocess, host, { memory } = {}) => {
       .then(serialize, error => failure(describe(error)))
       .then(text => {
         held -= argumentBytes
-        return take(storedBytes(text)) ? text : OVER_MEMORY_ANSWER
+        if (take(storedBytes(text))) return text
+        forget(key)
+        return OVER_MEMORY_ANSWER
       })
     answers.set(key, pending)
     return pending

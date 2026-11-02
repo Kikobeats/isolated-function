@@ -539,6 +539,47 @@ test('a string stored two bytes per character is charged for both', t => {
   )
 })
 
+test('an answer refused while other calls run is answered when asked again', async t => {
+  const { child, replies } = fakeChild()
+  const halfMemory = 'x'.repeat(ONE_MB / 2 + 1024)
+  let finishSlow
+  attach(
+    child,
+    {
+      slow: () => new Promise(resolve => (finishSlow = resolve)),
+      fast: () => halfMemory
+    },
+    { memory: 1 }
+  )
+
+  child.emit('message', { id: 1, method: 'slow', args: [halfMemory] })
+  child.emit('message', { id: 2, method: 'fast', args: [] })
+  await settle()
+  finishSlow()
+  await settle()
+  child.emit('message', { id: 3, method: 'fast', args: [] })
+  await settle()
+
+  t.deepEqual(replyTo(replies, 2), refused(2))
+  t.is(replyTo(replies, 1).value, undefined)
+  t.is(replyTo(replies, 3).value, halfMemory)
+})
+
+test('asking again for an answer that never fits does not use up the memory', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { huge: () => 'x'.repeat(ONE_MB), small: () => 'ok' }, { memory: 1 })
+
+  const moreAsksThanRememberedCallsFit = ONE_MB / 256 + 100
+  for (let id = 1; id <= moreAsksThanRememberedCallsFit; id++) {
+    child.emit('message', { id, method: 'huge', args: [] })
+    await settle()
+  }
+  child.emit('message', { id: 0, method: 'small', args: [] })
+  await settle()
+
+  t.is(replyTo(replies, 0).value, 'ok')
+})
+
 const keepsEveryResult = test.macro(async (t, options) => {
   const { child, replies } = fakeChild()
   attach(child, { big: megabyteResult }, options)
