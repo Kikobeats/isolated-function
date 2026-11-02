@@ -5,45 +5,57 @@ const { createLineReader, LINE_END, CLOSE_MESSAGE } = require('../channel')
 const CHANNEL = '__isolatedChannel'
 const CHANNEL_FD = 3
 
+const READ_SIZE = 64 * 1024
+
 const open = `(() => {
   const fs = require('node:fs')
-  const writeOutput = process.stdout.write.bind(process.stdout)
-  const exit = process.exit.bind(process)
+  const { StringDecoder } = require('node:string_decoder')
   const parse = JSON.parse
   const stringify = JSON.stringify
   const LINE_END = ${JSON.stringify(LINE_END)}
+  const CLOSE_LINE = LINE_END + ${JSON.stringify(JSON.stringify(CLOSE_MESSAGE))} + LINE_END
   const createLineReader = ${createLineReader.toString()}
-  const input = fs.createReadStream(null, { fd: ${CHANNEL_FD}, encoding: 'utf8', autoClose: false })
   const output = fs.createWriteStream(null, { fd: ${CHANNEL_FD}, autoClose: false })
+  const decoder = new StringDecoder('utf8')
+  const chunk = Buffer.alloc(${READ_SIZE})
   const listeners = []
   const closeListeners = []
+  let awaiting = 0
+  let reading = false
   let closed = false
-  let broken = false
 
-  input.on('data', createLineReader(line => {
+  const receive = createLineReader(line => {
+    awaiting = Math.max(0, awaiting - 1)
     const message = parse(line)
     for (const listener of listeners) listener(message)
-  }))
-
-  const exitOnceOutputIsWritten = () => setImmediate(() => writeOutput('', () => exit()))
+  })
 
   const close = () => {
     if (closed) return
     closed = true
-    if (broken) exitOnceOutputIsWritten()
-    else output.end(LINE_END + ${JSON.stringify(JSON.stringify(CLOSE_MESSAGE))} + LINE_END)
+    output.end(reading ? CLOSE_LINE : undefined)
     for (const listener of closeListeners) listener()
   }
 
-  input.on('end', close)
-  input.on('error', close)
-  output.on('error', () => {
-    broken = true
-    if (closed) exitOnceOutputIsWritten()
-  })
+  const readWhileAwaiting = () => {
+    if (reading || closed || awaiting === 0) return
+    reading = true
+    fs.read(${CHANNEL_FD}, chunk, 0, chunk.length, null, (error, bytes) => {
+      reading = false
+      if (error || bytes === 0) return close()
+      receive(decoder.write(chunk.subarray(0, bytes)))
+      readWhileAwaiting()
+    })
+  }
+
+  output.on('error', close)
 
   return Object.freeze({
-    send: (message, callback) => output.write(stringify(message) + LINE_END, callback),
+    send: (message, callback) => {
+      awaiting++
+      output.write(stringify(message) + LINE_END, callback)
+      readWhileAwaiting()
+    },
     onMessage: listener => { listeners.push(listener) },
     onClose: listener => { closeListeners.push(listener) },
     close
