@@ -2,6 +2,7 @@
 
 const SERIALIZE_ERROR = require('./serialize-error')
 const hostChannel = require('./host-channel')
+const { CHANNEL } = require('./channel')
 
 module.exports = (snippet, { hostMethods } = {}) => `;(send => {
   process.stdout.write = function () {}
@@ -52,7 +53,7 @@ ${hostMethods ? hostChannel.source(hostMethods) : ''}
       isFulfilled = false
     } finally {
       ${hostMethods ? `${hostChannel.CLOSE_HOST}()` : ''}
-      if (process.connected) process.disconnect()
+      ${CHANNEL}?.close()
       respond(isFulfilled, value, performance.now() - t0, logging)
     }
   })

@@ -456,7 +456,7 @@ The same method and arguments resolve once per run, so asking twice costs one re
 
 Once that reaches `memory`, a new call, or one whose answer does not fit, rejects with `the host call results exceed the run memory limit`, and a dial needing a new check is refused. A call already answered still answers. An answer refused for space is not remembered, so the next identical ask runs the method again. Without `memory`, what the host keeps is not limited.
 
-Passing `host` opens an IPC channel to the child. The isolate runs untrusted code and can write to that channel descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message is ignored.
+Passing `host` opens a channel to the child: a pipe on file descriptor 3 carrying one JSON message per line. The isolate runs untrusted code and can write to that descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message, including a line that is not JSON, is ignored.
 
 A call the code starts but never awaits does not take the run down, and a value the channel cannot carry, such as a `BigInt`, rejects that call rather than hanging it.
 

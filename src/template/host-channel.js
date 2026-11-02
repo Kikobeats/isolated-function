@@ -1,5 +1,7 @@
 'use strict'
 
+const { CHANNEL } = require('./channel')
+
 const HOST_CALL = 'globalThis.__isolated_host'
 const CLOSE_HOST = 'closeIsolatedHost'
 
@@ -7,8 +9,8 @@ const CLOSE_HOST = 'closeIsolatedHost'
    or `call.close` and must not be able to keep the channel open. */
 const source = methods => `
     const ${CLOSE_HOST} = (() => {
-      const request = process.send.bind(process)
-      const disconnect = process.disconnect.bind(process)
+      const request = ${CHANNEL}.send
+      const disconnect = ${CHANNEL}.close
       const pending = new Map()
       let lastId = 0
       let closed = false
@@ -18,14 +20,14 @@ const source = methods => `
         pending.clear()
       }
 
-      process.on('message', reply => {
+      ${CHANNEL}.onMessage(reply => {
         const waiting = pending.get(reply && reply.id)
         if (waiting === undefined) return
         pending.delete(reply.id)
         reply.failed ? waiting.reject(new Error(reply.reason)) : waiting.resolve(reply.value)
       })
 
-      process.on('disconnect', () => {
+      ${CHANNEL}.onClose(() => {
         closed = true
         settle('the host channel closed before answering')
       })

@@ -20,6 +20,8 @@ const {
 } = require('./compile/shells')
 const { METHOD: SSRF_METHOD, assertCanCheck, start: startDialCheck } = require('./egress')
 const { attach: attachHost } = require('./host')
+const { createChannel } = require('./channel')
+const { source: channelSource, CHANNEL_FD } = require('./template/channel')
 const compile = require('./compile')
 const { debug } = require('./debug')
 
@@ -80,7 +82,7 @@ const hasShell = () =>
 
 const spawn = ({ env, timeout, hasHost, memory }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
-  if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
+  if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'pipe']
   const limits = []
   if (process.platform === 'linux' && memory && hasShell()) {
     const kb = virtualKb(memory)
@@ -181,9 +183,9 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         const compiled = await compilePromise
         const dial = checksDials ? startDialCheck(ssrf, hosts) : undefined
         const ipcHost = dial ? { ...host, [SSRF_METHOD]: dial.answer } : host
-        const prelude = `${dial ? dial.prelude : ''}globalThis.__isolated_args=${JSON.stringify(
-          JSON.stringify(args)
-        )};`
+        const prelude = `${channelSource(hasHost)}${
+          dial ? dial.prelude : ''
+        }globalThis.__isolated_args=${JSON.stringify(JSON.stringify(args))};`
 
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
@@ -195,7 +197,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           hasHost,
           memory
         })
-        if (hasHost) attachHost(subprocess, ipcHost, { memory })
+        if (hasHost) attachHost(createChannel(subprocess.stdio[CHANNEL_FD]), ipcHost, { memory })
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

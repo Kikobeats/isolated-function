@@ -3,6 +3,8 @@
 const dns = require('node:dns')
 const net = require('node:net')
 
+const { CHANNEL } = require('./template/channel')
+
 const METHOD = '__ssrf'
 const HOST_DENIED = '*'
 const NESTED = new Set(['child-process', 'child_process', 'worker'])
@@ -55,7 +57,7 @@ const signedAnswer = (privateKey, ssrf) => (address, port) => {
 }
 
 /* install and dialPayload are copied in as source. The child cannot require this file. */
-const install = (method, publicKey, encode, hosts, denied) => {
+const install = (channel, method, publicKey, encode, hosts, denied) => {
   const net = require('node:net')
   const dns = require('node:dns')
   const { verify, createPublicKey } = require('node:crypto')
@@ -63,7 +65,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
   const dnsLookup = dns.lookup
   const ParseURL = globalThis.URL
   const key = createPublicKey(publicKey)
-  const request = process.send.bind(process)
+  const request = channel.send
   const pending = new Map()
   let id = 0
 
@@ -81,7 +83,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
     }
   }
 
-  process.on('message', reply => {
+  channel.onMessage(reply => {
     if (!reply || !pending.has(reply.id)) return
     const waiting = pending.get(reply.id)
     if (reply.failed === true) {
@@ -258,7 +260,7 @@ const install = (method, publicKey, encode, hosts, denied) => {
 }
 
 const preludeFor = (publicKey, hosts) =>
-  `;(${install.toString()})(${JSON.stringify(METHOD)},${JSON.stringify(
+  `;(${install.toString()})(${CHANNEL},${JSON.stringify(METHOD)},${JSON.stringify(
     publicKey
   )},${dialPayload.toString()},${JSON.stringify(hosts ?? null)},${JSON.stringify(HOST_DENIED)});\n`
 

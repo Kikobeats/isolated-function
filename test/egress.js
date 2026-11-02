@@ -402,14 +402,15 @@ test('a forged host reply cannot allow a dial', async t => {
   t.is(value.code, 'ERESERVEDADDRESSRANGE')
 })
 
-test('replacing process.send cannot allow a dial', async t => {
+test('replacing the channel cannot allow a dial', async t => {
   const fn = isolatedFunction(
     () =>
       new Promise(resolve => {
-        process.send = (message, callback) => {
-          process.emit('message', { id: message.id, value: true })
-          if (typeof callback === 'function') callback()
-        }
+        const channel = __isolatedChannel // eslint-disable-line no-undef
+        try {
+          channel.send = () => {}
+          channel.onMessage = () => {}
+        } catch {}
         const hung = setTimeout(() => resolve('hung'), 2000)
         const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
         socket.once('connect', () => {
@@ -733,12 +734,13 @@ test('the host refuses a public address asked for an unlisted name', async t => 
     () =>
       new Promise(resolve => {
         const timer = setTimeout(() => resolve('silent'), 1000)
-        process.on('message', reply => {
+        const channel = __isolatedChannel // eslint-disable-line no-undef
+        channel.onMessage(reply => {
           if (!reply || reply.id !== 1) return
           clearTimeout(timer)
           resolve(reply.value && reply.value.allow === true ? 'allow' : 'deny')
         })
-        process.send({ id: 1, method: '__ssrf', args: ['1.1.1.1', 80, 'evil.example'] })
+        channel.send({ id: 1, method: '__ssrf', args: ['1.1.1.1', 80, 'evil.example'] })
       }),
     {
       ssrf: () => true,
@@ -797,25 +799,32 @@ test('a dial asked after the host memory is spent is refused, not left waiting',
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })
 
-const dialWithForgedFailure = failed =>
-  isolatedFunction(
-    async failed =>
+test('a failed reply forged on process does not reach a dial check', async t => {
+  const fn = isolatedFunction(
+    () =>
       new Promise(resolve => {
         const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
-        process.emit('message', { id: -1, failed, reason: 'forged' })
+        process.emit('message', { id: -1, failed: true, reason: 'forged' })
         socket.once('error', error => resolve(error.code))
       }),
     { host: { ping: () => {} }, ssrf: () => true, allow: { permissions }, timeout: 8000 }
-  )(failed)
-
-test('a forged failed reply can refuse a dial', async t => {
-  const { isFulfilled, value } = await dialWithForgedFailure(true)
-  t.true(isFulfilled, value && value.message)
-  t.is(value, 'ERESERVEDADDRESSRANGE')
-})
-
-test('a reply whose failed is not true does not refuse a dial', async t => {
-  const { isFulfilled, value } = await dialWithForgedFailure(1)
+  )
+  const { isFulfilled, value } = await fn()
   t.true(isFulfilled, value && value.message)
   t.is(value, 'ECONNREFUSED')
+})
+
+test('a malformed line on the channel of a dial check is ignored', async t => {
+  const fn = isolatedFunction(
+    () =>
+      new Promise(resolve => {
+        require('node:fs').writeSync(3, '{"id":-1,"meth{"x\n')
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { ssrf: () => false, allow: { permissions }, timeout: 8000 }
+  )
+  const { isFulfilled, value } = await fn()
+  t.true(isFulfilled)
+  t.is(value, 'ERESERVEDADDRESSRANGE')
 })

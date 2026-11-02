@@ -46,7 +46,7 @@ const describe = value => {
 /**
  * A snippet that never awaits its call can finish and close the channel while
  * the reply is in flight. Without a callback the resulting EPIPE is emitted on
- * the subprocess, and an `error` there fails the whole run.
+ * the channel, and an `error` there fails the whole run.
  */
 const absorbSendError = () => {}
 
@@ -55,7 +55,7 @@ const UNKNOWN_METHOD_ANSWER = failure(UNKNOWN_METHOD)
 const UNSHAREABLE_ARGS_ANSWER = failure(UNSHAREABLE_ARGS)
 const OVER_MEMORY_ANSWER = failure(OVER_MEMORY)
 
-const attach = (subprocess, host, { memory } = {}) => {
+const attach = (channel, host, { memory } = {}) => {
   const answers = new Map()
   const limit = memory ? memory * BYTES_PER_MB : Infinity
   let held = 0
@@ -88,9 +88,9 @@ const attach = (subprocess, host, { memory } = {}) => {
   }
 
   const answer = (id, text) => {
-    if (!subprocess.connected) return
+    if (!channel.connected) return
     try {
-      subprocess.send({ id, ...JSON.parse(text) }, absorbSendError)
+      channel.send({ id, ...JSON.parse(text) }, absorbSendError)
     } catch {}
   }
 
@@ -132,7 +132,7 @@ const attach = (subprocess, host, { memory } = {}) => {
     return pending
   }
 
-  subprocess.on('message', message => {
+  channel.on('message', message => {
     if (!isWellFormed(message)) return
     const { id, method, args = [] } = message
 

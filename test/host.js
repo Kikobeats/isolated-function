@@ -122,10 +122,12 @@ test('a failure on the host surfaces inside the snippet', async t => {
 })
 
 test('a run without a host has no channel at all', async t => {
-  const { value } = await isolatedFunction(async () => typeof process.send, {
-    timeout: 20000
-  })()
-  t.is(value, 'undefined')
+  const { value } = await isolatedFunction(
+    // eslint-disable-next-line no-undef
+    async () => [typeof process.send, typeof __isolatedChannel],
+    { timeout: 20000 }
+  )()
+  t.deepEqual(value, ['undefined', 'undefined'])
 })
 
 test('the host is not reachable from a snippet that was given no host', async t => {
@@ -694,4 +696,27 @@ test('the same arguments under different methods are told apart', async t => {
     { id: 1, value: 1 },
     { id: 2, value: 2 }
   ])
+})
+
+test('a malformed line on the host channel is ignored and the run goes on', async t => {
+  const { value } = await run(
+    async () => {
+      require('node:fs').writeSync(3, '{"id":1,"meth{"x\n')
+      return globalThis.__isolated_host('ping')
+    },
+    { ping: () => 'pong' }
+  )
+  t.is(value, 'pong')
+})
+
+test('a call and its answer cross the channel whole when they span many reads', async t => {
+  const { value } = await run(
+    async () => {
+      const text = 'x'.repeat(256 * 1024) + '語'.repeat(512 * 1024)
+      const answer = await globalThis.__isolated_host('echo', [text])
+      return answer === text
+    },
+    { echo: text => text }
+  )
+  t.true(value)
 })
