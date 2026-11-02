@@ -33,7 +33,7 @@ const open = `(() => {
   const close = () => {
     if (closed) return
     closed = true
-    output.end(reading ? CLOSE_LINE : undefined)
+    output.end(CLOSE_LINE)
     for (const listener of closeListeners) listener()
   }
 
@@ -42,7 +42,7 @@ const open = `(() => {
     reading = true
     fs.read(${CHANNEL_FD}, chunk, 0, chunk.length, null, (error, bytes) => {
       reading = false
-      if (error || bytes === 0) return close()
+      if (error || bytes === 0) return
       receive(decoder.write(chunk.subarray(0, bytes)))
       readWhileAwaiting()
     })

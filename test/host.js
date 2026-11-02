@@ -758,3 +758,31 @@ test('a call left unawaited does not hold the run open until the host answers', 
   t.is(value, 'done')
   t.true(Date.now() - started < 3000, `${Date.now() - started}ms`)
 })
+
+test('a partial line does not swallow the close of a call left unawaited', async t => {
+  const started = Date.now()
+  const { value } = await run(
+    async () => {
+      globalThis.__isolated_host('slow')
+      require('node:fs').writeSync(3, '{"x')
+      return 'done'
+    },
+    { slow: () => new Promise(resolve => setTimeout(resolve, 4000)) },
+    { timeout: 10000 }
+  )
+  t.is(value, 'done')
+  t.true(Date.now() - started < 3000, `${Date.now() - started}ms`)
+})
+
+test('a snippet that closes the channel after its calls still finishes', async t => {
+  const { value } = await run(
+    async () => {
+      const answer = await globalThis.__isolated_host('ping')
+      require('node:fs').closeSync(3)
+      return answer
+    },
+    { ping: () => 'pong' },
+    { timeout: 5000 }
+  )
+  t.is(value, 'pong')
+})
