@@ -482,10 +482,10 @@ test('the results a run keeps stay within its memory, and repeats still answer',
   t.is(replyTo(replies, 7).value, megabyteResult(1))
 })
 
-test('answers that fill the memory exactly are kept', async t => {
+const fillsMemoryExactly = test.macro(async (t, character) => {
   const { child, replies } = fakeChild()
   const answerWrapping = JSON.stringify({ value: '' }).length
-  const halfFit = 'x'.repeat(ONE_MB / 2 - 256 - answerWrapping)
+  const halfFit = character.repeat(ONE_MB / 2 - 256 - answerWrapping)
   attach(child, { fill: () => halfFit }, { memory: 1 })
 
   child.emit('message', { id: 1, method: 'fill', args: [1] })
@@ -496,19 +496,8 @@ test('answers that fill the memory exactly are kept', async t => {
   t.is(replyTo(replies, 2).value, halfFit)
 })
 
-test('characters up to U+00FF are charged one byte each', async t => {
-  const { child, replies } = fakeChild()
-  const answerWrapping = JSON.stringify({ value: '' }).length
-  const halfFit = '\u00ff'.repeat(ONE_MB / 2 - 256 - answerWrapping)
-  attach(child, { fill: () => halfFit }, { memory: 1 })
-
-  child.emit('message', { id: 1, method: 'fill', args: [1] })
-  child.emit('message', { id: 2, method: 'fill', args: [2] })
-  await settle()
-
-  t.is(replyTo(replies, 1).value, halfFit)
-  t.is(replyTo(replies, 2).value, halfFit)
-})
+test('answers that fill the memory exactly are kept', fillsMemoryExactly, 'x')
+test('characters up to U+00FF are charged one byte each', fillsMemoryExactly, '\u00ff')
 
 test('characters outside the BMP are charged two bytes per code unit', async t => {
   const { child, replies } = fakeChild()
@@ -550,9 +539,9 @@ test('a string stored two bytes per character is charged for both', t => {
   )
 })
 
-test('a run without memory keeps every result', async t => {
+const keepsEveryResult = test.macro(async (t, options) => {
   const { child, replies } = fakeChild()
-  attach(child, { big: megabyteResult })
+  attach(child, { big: megabyteResult }, options)
 
   for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
   await settle()
@@ -563,18 +552,12 @@ test('a run without memory keeps every result', async t => {
   )
 })
 
-test('a run with memory 0 keeps every result, as its heap is not limited either', async t => {
-  const { child, replies } = fakeChild()
-  attach(child, { big: megabyteResult }, { memory: 0 })
-
-  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
-  await settle()
-
-  t.deepEqual(
-    replies.map(reply => reply.failed),
-    Array(6).fill(undefined)
-  )
-})
+test('a run without memory keeps every result', keepsEveryResult, undefined)
+test(
+  'a run with memory 0 keeps every result, as its heap is not limited either',
+  keepsEveryResult,
+  { memory: 0 }
+)
 
 test('remembering a call costs memory even when its result is empty', async t => {
   const { child, replies } = fakeChild()
