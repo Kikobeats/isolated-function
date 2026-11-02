@@ -496,6 +496,31 @@ test('answers that fill the memory exactly are kept', async t => {
   t.is(replyTo(replies, 2).value, halfFit)
 })
 
+test('characters up to U+00FF are charged one byte each', async t => {
+  const { child, replies } = fakeChild()
+  const answerWrapping = JSON.stringify({ value: '' }).length
+  const halfFit = '\u00ff'.repeat(ONE_MB / 2 - 256 - answerWrapping)
+  attach(child, { fill: () => halfFit }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'fill', args: [1] })
+  child.emit('message', { id: 2, method: 'fill', args: [2] })
+  await settle()
+
+  t.is(replyTo(replies, 1).value, halfFit)
+  t.is(replyTo(replies, 2).value, halfFit)
+})
+
+test('characters outside the BMP are charged two bytes per code unit', async t => {
+  const { child, replies } = fakeChild()
+  const fitsAtOneByte = '\u{1f600}'.repeat(ONE_MB / 4)
+  attach(child, { astral: () => fitsAtOneByte }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'astral', args: [] })
+  await settle()
+
+  t.deepEqual(replyTo(replies, 1), refused(1))
+})
+
 test('repeating a large answer many times at once still answers every call', async t => {
   const config = { flags: { a: true }, blob: 'x'.repeat(300 * 1024) }
   const fn = isolatedFunction(
@@ -528,6 +553,19 @@ test('a string stored two bytes per character is charged for both', t => {
 test('a run without memory keeps every result', async t => {
   const { child, replies } = fakeChild()
   attach(child, { big: megabyteResult })
+
+  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
+  await settle()
+
+  t.deepEqual(
+    replies.map(reply => reply.failed),
+    Array(6).fill(undefined)
+  )
+})
+
+test('a run with memory 0 keeps every result, as its heap is not limited either', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { big: megabyteResult }, { memory: 0 })
 
   for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
   await settle()

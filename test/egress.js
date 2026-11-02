@@ -796,3 +796,26 @@ test('a dial asked after the host memory is spent is refused, not left waiting',
   t.true(isFulfilled, value && value.message)
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })
+
+const dialWithForgedFailure = failed =>
+  isolatedFunction(
+    async failed =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        process.emit('message', { id: -1, failed, reason: 'forged' })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { host: { ping: () => {} }, ssrf: () => true, allow: { permissions }, timeout: 8000 }
+  )(failed)
+
+test('a forged failed reply can refuse a dial', async t => {
+  const { isFulfilled, value } = await dialWithForgedFailure(true)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a reply whose failed is not true does not refuse a dial', async t => {
+  const { isFulfilled, value } = await dialWithForgedFailure(1)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ECONNREFUSED')
+})
