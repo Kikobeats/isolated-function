@@ -501,18 +501,16 @@ test('replies the isolate has not read count against its memory', async t => {
   child.send = message => replies.push(message)
   const killedWith = []
   child.kill = signal => killedWith.push(signal)
-  const replyOverhead = 512
+  const calls = 5
+  const replyCost = 512
   const answerWrapping = JSON.stringify({ value: '' }).length
-  const twoMegabyteReply = 'x'.repeat(2 * ONE_MB - replyOverhead - answerWrapping)
-  const channel = attach(child, { big: () => twoMegabyteReply }, { memory: 8 })
+  const replyBytes = (8 * ONE_MB - calls * replyCost) / 4
+  const answer = 'x'.repeat(replyBytes - answerWrapping)
+  const channel = attach(child, { big: () => answer }, { memory: 8 })
 
-  for (let id = 1; id <= 4; id++) child.emit('message', { id, method: 'big', args: [] })
+  for (let id = 1; id <= calls; id++) child.emit('message', { id, method: 'big', args: [] })
   await settle()
-  t.is(replies.length, 4)
-  t.false(channel.outOfMemory())
 
-  child.emit('message', { id: 5, method: 'big', args: [] })
-  await settle()
   t.is(replies.length, 4)
   t.true(channel.outOfMemory())
   t.deepEqual(killedWith, ['SIGKILL'])
@@ -536,8 +534,11 @@ test('calls waiting on the same running call each cost memory', async t => {
   child.kill = () => {}
   const channel = attach(child, { slow: () => new Promise(() => {}) }, { memory: 1 })
 
-  for (let id = 1; id <= 3000; id++) child.emit('message', { id, method: 'slow', args: [] })
+  const callsThatFit = ONE_MB / 512
+  for (let id = 1; id <= callsThatFit; id++) child.emit('message', { id, method: 'slow', args: [] })
+  t.false(channel.outOfMemory())
 
+  child.emit('message', { id: callsThatFit + 1, method: 'slow', args: [] })
   t.true(channel.outOfMemory())
 })
 

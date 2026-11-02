@@ -102,7 +102,7 @@ const attach = (subprocess, host, { memory } = {}) => {
     const written = () => {
       unread -= BYTES_PER_UNREAD_REPLY + bytes
     }
-    if (!subprocess.connected) return written()
+    if (!subprocess.connected) return
     try {
       subprocess.send({ id, ...JSON.parse(text) }, written)
     } catch {
