@@ -18,12 +18,7 @@ const open = `(() => {
   let closed = false
 
   input.on('data', createLineReader(line => {
-    let message
-    try {
-      message = parse(line)
-    } catch {
-      return
-    }
+    const message = parse(line)
     for (const listener of listeners) listener(message)
   }))
 
@@ -34,13 +29,8 @@ const open = `(() => {
     for (const listener of closeListeners) listener()
   }
 
-  const release = () => {
-    close()
-    fs.close(${CHANNEL_FD}, () => {})
-  }
-
-  input.on('end', release)
-  input.on('error', release)
+  input.on('end', close)
+  input.on('error', close)
   output.on('error', close)
 
   return Object.freeze({

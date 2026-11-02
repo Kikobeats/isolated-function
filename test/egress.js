@@ -828,3 +828,18 @@ test('a malformed line on the channel of a dial check is ignored', async t => {
   t.true(isFulfilled)
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })
+
+test('a snippet cannot keep the channel of a dial check open', async t => {
+  const fn = isolatedFunction(
+    () => {
+      try {
+        __isolatedChannel.close = () => {} // eslint-disable-line no-undef
+      } catch {}
+      return 'done'
+    },
+    { ssrf: () => false, allow: { permissions }, timeout: 4000 }
+  )
+  const { isFulfilled, value } = await fn()
+  t.true(isFulfilled)
+  t.is(value, 'done')
+})
