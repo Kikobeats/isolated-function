@@ -7,6 +7,8 @@ const CHANNEL_FD = 3
 
 const open = `(() => {
   const fs = require('node:fs')
+  const writeOutput = process.stdout.write.bind(process.stdout)
+  const exit = process.exit.bind(process)
   const parse = JSON.parse
   const stringify = JSON.stringify
   const LINE_END = ${JSON.stringify(LINE_END)}
@@ -16,22 +18,29 @@ const open = `(() => {
   const listeners = []
   const closeListeners = []
   let closed = false
+  let broken = false
 
   input.on('data', createLineReader(line => {
     const message = parse(line)
     for (const listener of listeners) listener(message)
   }))
 
+  const exitOnceOutputIsWritten = () => setImmediate(() => writeOutput('', () => exit()))
+
   const close = () => {
     if (closed) return
     closed = true
-    output.end(${JSON.stringify(JSON.stringify(CLOSE_MESSAGE))} + LINE_END)
+    if (broken) exitOnceOutputIsWritten()
+    else output.end(LINE_END + ${JSON.stringify(JSON.stringify(CLOSE_MESSAGE))} + LINE_END)
     for (const listener of closeListeners) listener()
   }
 
   input.on('end', close)
   input.on('error', close)
-  output.on('error', close)
+  output.on('error', () => {
+    broken = true
+    if (closed) exitOnceOutputIsWritten()
+  })
 
   return Object.freeze({
     send: (message, callback) => output.write(stringify(message) + LINE_END, callback),

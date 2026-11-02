@@ -720,3 +720,27 @@ test('a call and its answer cross the channel whole when they span many reads', 
   )
   t.true(value)
 })
+
+test('a partial line left on the channel does not keep the run open', async t => {
+  const { value } = await run(
+    async () => {
+      require('node:fs').writeSync(3, '{"x')
+      return 1
+    },
+    { ping: () => 'pong' },
+    { timeout: 5000 }
+  )
+  t.is(value, 1)
+})
+
+test('a snippet that closes the channel still finishes its run', async t => {
+  const { value } = await run(
+    async () => {
+      require('node:fs').closeSync(3)
+      return 'done'
+    },
+    { ping: () => 'pong' },
+    { timeout: 5000 }
+  )
+  t.is(value, 'done')
+})
