@@ -446,7 +446,7 @@ import { HostCall } from 'isolated-function'
 const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
 ```
 
-The same method and arguments resolve once per run, so asking twice costs one resolution.
+The same method and arguments resolve once per run, so asking twice costs one resolution. A run gets 10,000 distinct calls; past that, a new call rejects with `the host call budget for this run is exhausted`, while a call already made still answers. Each call is remembered by a fixed-size digest of its method and arguments, so large arguments are not held after their call is answered.
 
 Passing `host` opens an IPC channel to the child. The isolate runs untrusted code and can write to that channel descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message is ignored.
 

@@ -1,9 +1,17 @@
 'use strict'
 
 const { EventEmitter } = require('events')
+const { execFileSync } = require('child_process')
 const { default: test } = require('ava')
 
-const { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE } = require('../src/host')
+const {
+  attach,
+  UNKNOWN_METHOD,
+  UNSHAREABLE_ARGS,
+  INDESCRIBABLE,
+  TOO_MANY_CALLS,
+  MAX_DISTINCT_CALLS
+} = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -340,11 +348,99 @@ test('arguments that cannot be keyed do not reach the host', async t => {
   child.send = message => {
     replies.push(message)
   }
-  attach(child, { ping: () => calls++ }, { maxCalls: 1 })
+  attach(child, { ping: () => calls++ })
   const args = []
   args.push(args)
   child.emit('message', { id: 1, method: 'ping', args })
   await Promise.resolve()
   t.is(calls, 0)
   t.deepEqual(replies, [{ id: 1, failed: true, reason: UNSHAREABLE_ARGS }])
+})
+
+const fakeChild = () => {
+  const child = new EventEmitter()
+  const replies = []
+  child.connected = true
+  child.send = message => {
+    replies.push(message)
+  }
+  return { child, replies }
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve))
+
+const RETAINED_AFTER_LARGE_CALLS = `
+  const { EventEmitter } = require('events')
+  const { attach } = require(${JSON.stringify(require.resolve('../src/host'))})
+  const child = new EventEmitter()
+  child.connected = true
+  child.send = () => {}
+  attach(child, { content: async () => 'html' })
+  global.gc()
+  const before = process.memoryUsage().heapUsed
+  for (let call = 0; call < 40; call++) {
+    child.emit('message', { id: call, method: 'content', args: ['x'.repeat(4 * 1024 * 1024) + call] })
+  }
+  setImmediate(() => {
+    global.gc()
+    process.stdout.write(String(process.memoryUsage().heapUsed - before))
+  })
+`
+
+test('large arguments are not kept once their call is answered', t => {
+  const retainedBytes = Number(
+    execFileSync(process.execPath, ['--expose-gc', '-e', RETAINED_AFTER_LARGE_CALLS])
+  )
+  t.true(retainedBytes < 8 * 1024 * 1024, `${retainedBytes} bytes retained`)
+})
+
+test('a run is refused new calls past its budget, but repeats still answer', async t => {
+  const { child, replies } = fakeChild()
+  let calls = 0
+  attach(child, { ping: () => ++calls })
+
+  for (let id = 0; id < MAX_DISTINCT_CALLS; id++) {
+    child.emit('message', { id, method: 'ping', args: [id] })
+  }
+  child.emit('message', { id: MAX_DISTINCT_CALLS, method: 'ping', args: [MAX_DISTINCT_CALLS] })
+  child.emit('message', { id: MAX_DISTINCT_CALLS + 1, method: 'ping', args: [0] })
+  await settle()
+
+  const replyTo = id => replies.find(reply => reply.id === id)
+  t.is(calls, MAX_DISTINCT_CALLS)
+  t.deepEqual(replyTo(MAX_DISTINCT_CALLS), {
+    id: MAX_DISTINCT_CALLS,
+    failed: true,
+    reason: TOO_MANY_CALLS
+  })
+  t.deepEqual(replyTo(MAX_DISTINCT_CALLS + 1), { id: MAX_DISTINCT_CALLS + 1, value: 1 })
+})
+
+test('calls whose arguments differ only in a long tail are still told apart', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { echo: tail => tail.slice(-1) })
+  const prefix = 'x'.repeat(1024 * 1024)
+
+  child.emit('message', { id: 1, method: 'echo', args: [prefix + 'a'] })
+  child.emit('message', { id: 2, method: 'echo', args: [prefix + 'b'] })
+  await settle()
+
+  t.deepEqual(replies, [
+    { id: 1, value: 'a' },
+    { id: 2, value: 'b' }
+  ])
+})
+
+test('the same arguments under different methods are told apart', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { one: () => 1, two: () => 2 })
+
+  child.emit('message', { id: 1, method: 'one', args: [] })
+  child.emit('message', { id: 2, method: 'two', args: [] })
+  await settle()
+
+  t.deepEqual(replies, [
+    { id: 1, value: 1 },
+    { id: 2, value: 2 }
+  ])
 })

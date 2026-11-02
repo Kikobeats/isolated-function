@@ -1,7 +1,22 @@
 'use strict'
 
+const { createHash } = require('crypto')
+
 const UNKNOWN_METHOD = 'the host does not expose this method'
 const UNSHAREABLE_ARGS = 'the host call arguments cannot be compared'
+const TOO_MANY_CALLS = 'the host call budget for this run is exhausted'
+
+/**
+ * The isolate writes the arguments, so they are as large and as varied as the
+ * snippet wants. A call is remembered by a fixed-size digest, and a run gets a
+ * bounded number of distinct calls, so the host never holds more than this.
+ */
+const MAX_DISTINCT_CALLS = 10_000
+
+const keyOf = (method, args) =>
+  createHash('sha256')
+    .update(JSON.stringify([method, args]))
+    .digest('base64url')
 
 /**
  * Every inbound message is untrusted. The isolate runs third-party code and can
@@ -69,13 +84,14 @@ const attach = (subprocess, host) => {
   const resolve = (fn, method, args) => {
     let key
     try {
-      key = `${method}:${JSON.stringify(args)}`
+      key = keyOf(method, args)
     } catch {
       return Promise.reject(new Error(UNSHAREABLE_ARGS))
     }
 
     const seen = resolved.get(key)
     if (seen !== undefined) return seen
+    if (resolved.size >= MAX_DISTINCT_CALLS) return Promise.reject(new Error(TOO_MANY_CALLS))
 
     const pending = Promise.resolve().then(() => fn(...args))
     resolved.set(key, pending)
@@ -98,4 +114,11 @@ const attach = (subprocess, host) => {
   })
 }
 
-module.exports = { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE }
+module.exports = {
+  attach,
+  UNKNOWN_METHOD,
+  UNSHAREABLE_ARGS,
+  INDESCRIBABLE,
+  TOO_MANY_CALLS,
+  MAX_DISTINCT_CALLS
+}
