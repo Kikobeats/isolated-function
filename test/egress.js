@@ -762,3 +762,25 @@ test('hosts rejects a pair that is not a host and port', t => {
   )
   t.is(error.message, 'Expected `hosts` to be { host, port } pairs')
 })
+
+test('a dial asked after the host call budget is spent is refused, not left waiting', async t => {
+  const fn = isolatedFunction(
+    async budget => {
+      const host = globalThis.__isolated_host
+      await Promise.all(Array.from({ length: budget }, (_, call) => host('ping', [call])))
+      return new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('error', error => resolve(error.code))
+      })
+    },
+    {
+      host: { ping: call => call },
+      ssrf: () => true,
+      allow: { permissions },
+      timeout: 5000
+    }
+  )
+  const { isFulfilled, value } = await fn(require('../src/host').MAX_DISTINCT_CALLS)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
