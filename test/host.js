@@ -9,8 +9,7 @@ const {
   UNKNOWN_METHOD,
   UNSHAREABLE_ARGS,
   INDESCRIBABLE,
-  TOO_MANY_CALLS,
-  MAX_DISTINCT_CALLS
+  OVER_MEMORY
 } = require('../src/host')
 const isolatedFunction = require('..')()
 
@@ -394,26 +393,93 @@ test('large arguments are not kept once their call is answered', t => {
   t.true(retainedBytes < 8 * 1024 * 1024, `${retainedBytes} bytes retained`)
 })
 
-test('a run is refused new calls past its budget, but repeats still answer', async t => {
-  const { child, replies } = fakeChild()
-  let calls = 0
-  attach(child, { ping: () => ++calls })
+const ONE_MB = 1024 * 1024
+const megabyteResult = n => 'x'.repeat(ONE_MB) + n
+const replyTo = (replies, id) => replies.find(reply => reply.id === id)
+const refused = id => ({ id, failed: true, reason: OVER_MEMORY })
 
-  for (let id = 0; id < MAX_DISTINCT_CALLS; id++) {
-    child.emit('message', { id, method: 'ping', args: [id] })
-  }
-  child.emit('message', { id: MAX_DISTINCT_CALLS, method: 'ping', args: [MAX_DISTINCT_CALLS] })
-  child.emit('message', { id: MAX_DISTINCT_CALLS + 1, method: 'ping', args: [0] })
+test('the results a run keeps stay within its memory, and repeats still answer', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { big: megabyteResult }, { memory: 4 })
+
+  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
+  await settle()
+  child.emit('message', { id: 7, method: 'big', args: [1] })
   await settle()
 
-  const replyTo = id => replies.find(reply => reply.id === id)
-  t.is(calls, MAX_DISTINCT_CALLS)
-  t.deepEqual(replyTo(MAX_DISTINCT_CALLS), {
-    id: MAX_DISTINCT_CALLS,
-    failed: true,
-    reason: TOO_MANY_CALLS
-  })
-  t.deepEqual(replyTo(MAX_DISTINCT_CALLS + 1), { id: MAX_DISTINCT_CALLS + 1, value: 1 })
+  for (const id of [1, 2, 3]) {
+    t.is(replyTo(replies, id).value, megabyteResult(id))
+  }
+  for (const id of [4, 5, 6]) {
+    t.deepEqual(replyTo(replies, id), refused(id))
+  }
+  t.is(replyTo(replies, 7).value, megabyteResult(1))
+})
+
+test('a result that fills the memory exactly is kept', async t => {
+  const { child, replies } = fakeChild()
+  const quotes = 2
+  const exactFit = 'x'.repeat(ONE_MB - 256 - quotes)
+  attach(child, { fill: () => exactFit }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'fill', args: [] })
+  await settle()
+
+  t.is(replyTo(replies, 1).value, exactFit)
+})
+
+test('a run without memory keeps every result', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { big: megabyteResult })
+
+  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
+  await settle()
+
+  t.deepEqual(
+    replies.map(reply => reply.failed),
+    Array(6).fill(undefined)
+  )
+})
+
+test('remembering a call costs memory even when its result is empty', async t => {
+  const { child, replies } = fakeChild()
+  let calls = 0
+  attach(
+    child,
+    {
+      ping: () => {
+        calls++
+      }
+    },
+    { memory: 1 }
+  )
+
+  const callsThatFit = ONE_MB / 256
+  for (let id = 0; id <= callsThatFit; id++) {
+    child.emit('message', { id, method: 'ping', args: [id] })
+  }
+  await settle()
+
+  t.is(calls, callsThatFit)
+  t.deepEqual(replyTo(replies, callsThatFit), refused(callsThatFit))
+})
+
+test('the memory option reaches the host channel', async t => {
+  const fn = isolatedFunction(
+    async () => {
+      const host = globalThis.__isolated_host
+      const calls = Array.from({ length: 10 }, (_, n) =>
+        host('big', [n]).then(
+          () => true,
+          error => error.message
+        )
+      )
+      return Promise.all(calls)
+    },
+    { host: { big: n => 'x'.repeat(4 * ONE_MB) + n }, memory: 32, timeout: 10000 }
+  )
+  const { value } = await fn()
+  t.deepEqual(value, [...Array(7).fill(true), ...Array(3).fill(OVER_MEMORY)])
 })
 
 test('calls whose arguments differ only in a long tail are still told apart', async t => {

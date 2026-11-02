@@ -195,7 +195,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           hasHost,
           memory
         })
-        if (hasHost) attachHost(subprocess, ipcHost)
+        if (hasHost) attachHost(subprocess, ipcHost, { memory })
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess

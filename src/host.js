@@ -4,14 +4,12 @@ const { createHash } = require('crypto')
 
 const UNKNOWN_METHOD = 'the host does not expose this method'
 const UNSHAREABLE_ARGS = 'the host call arguments cannot be compared'
-const TOO_MANY_CALLS = 'the host call budget for this run is exhausted'
+const OVER_MEMORY = 'the host call results exceed the run memory limit'
 
-/**
- * The isolate writes the arguments, so they are as large and as varied as the
- * snippet wants. A call is remembered by a fixed-size digest, and a run gets a
- * bounded number of distinct calls, so the host never holds more than this.
- */
-const MAX_DISTINCT_CALLS = 10_000
+const BYTES_PER_MB = 1024 * 1024
+const BYTES_PER_REMEMBERED_CALL = 256
+
+const sizeOf = value => JSON.stringify(value)?.length ?? 0
 
 const keyOf = (method, args) =>
   createHash('sha256')
@@ -52,8 +50,18 @@ const describe = value => {
  */
 const absorbSendError = () => {}
 
-const attach = (subprocess, host) => {
+const attach = (subprocess, host, { memory } = {}) => {
   const resolved = new Map()
+  const limit = memory ? memory * BYTES_PER_MB : Infinity
+  let held = 0
+
+  const keep = value => {
+    const bytes = sizeOf(value)
+    if (held + bytes > limit) throw new Error(OVER_MEMORY)
+    held += bytes
+    return value
+  }
+
   /**
    * Fixed when the run starts. A method added on `host` later is not reachable.
    * Bound to `host` so a method call still sees that object as `this`.
@@ -91,9 +99,12 @@ const attach = (subprocess, host) => {
 
     const seen = resolved.get(key)
     if (seen !== undefined) return seen
-    if (resolved.size >= MAX_DISTINCT_CALLS) return Promise.reject(new Error(TOO_MANY_CALLS))
+    if (held + BYTES_PER_REMEMBERED_CALL > limit) return Promise.reject(new Error(OVER_MEMORY))
+    held += BYTES_PER_REMEMBERED_CALL
 
-    const pending = Promise.resolve().then(() => fn(...args))
+    const pending = Promise.resolve()
+      .then(() => fn(...args))
+      .then(keep)
     resolved.set(key, pending)
     return pending
   }
@@ -119,6 +130,5 @@ module.exports = {
   UNKNOWN_METHOD,
   UNSHAREABLE_ARGS,
   INDESCRIBABLE,
-  TOO_MANY_CALLS,
-  MAX_DISTINCT_CALLS
+  OVER_MEMORY
 }

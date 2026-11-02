@@ -7,7 +7,6 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('ava')
 
-const { MAX_DISTINCT_CALLS } = require('../src/host')
 const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
@@ -764,24 +763,36 @@ test('hosts rejects a pair that is not a host and port', t => {
   t.is(error.message, 'Expected `hosts` to be { host, port } pairs')
 })
 
-test('a dial asked after the host call budget is spent is refused, not left waiting', async t => {
+test('a dial asked after the host memory is spent is refused, not left waiting', async t => {
   const fn = isolatedFunction(
-    async budget => {
+    async callsThatFit => {
       const host = globalThis.__isolated_host
-      await Promise.all(Array.from({ length: budget }, (_, call) => host('ping', [call])))
+      const batch = 10_000
+      for (let first = 0; first < callsThatFit; first += batch) {
+        const calls = Array.from({ length: batch }, (_, n) => host('ping', [first + n]))
+        await Promise.all(
+          calls.map(call =>
+            call.then(
+              () => {},
+              () => {}
+            )
+          )
+        )
+      }
       return new Promise(resolve => {
         const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
         socket.once('error', error => resolve(error.code))
       })
     },
     {
-      host: { ping: call => call },
+      host: { ping: () => {} },
       ssrf: () => true,
+      memory: 32,
       allow: { permissions },
-      timeout: 5000
+      timeout: 8000
     }
   )
-  const { isFulfilled, value } = await fn(MAX_DISTINCT_CALLS)
+  const { isFulfilled, value } = await fn((32 * 1024 * 1024) / 256)
   t.true(isFulfilled, value && value.message)
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })

@@ -154,8 +154,8 @@ export interface IsolatedFunctionOptions {
    * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
    * Each is resolved when the snippet asks for it and never before, so work the
    * snippet does not reach costs nothing. The same method and arguments resolve
-   * once per run. A run gets 10,000 distinct calls; past that, a new call
-   * rejects while a call already made still answers.
+   * once per run. What the host keeps counts against `memory`; past it, a new
+   * call rejects while a call already answered still answers.
    *
    * The isolate runs untrusted code and can write to the channel descriptor
    * directly, so treat every argument as untrusted input: a message proves that
