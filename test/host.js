@@ -501,7 +501,8 @@ test('replies the isolate has not read count against its memory', async t => {
     replies.push(message)
     unread.push(written)
   }
-  const twoMegabytes = 'x'.repeat(2 * ONE_MB)
+  const answerWrapping = JSON.stringify({ value: '' }).length
+  const twoMegabytes = 'x'.repeat(2 * ONE_MB - answerWrapping)
   attach(child, { big: () => twoMegabytes }, { memory: 8 })
 
   for (let id = 1; id <= 5; id++) child.emit('message', { id, method: 'big', args: [] })
@@ -509,7 +510,7 @@ test('replies the isolate has not read count against its memory', async t => {
 
   t.deepEqual(
     replies.map(reply => reply.failed === true),
-    [false, false, false, true, true]
+    [false, false, false, false, true]
   )
 
   for (const written of unread.splice(0)) written()
