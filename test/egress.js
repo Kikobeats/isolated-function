@@ -7,6 +7,7 @@ const os = require('node:os')
 const path = require('node:path')
 const test = require('ava')
 
+const { MAX_DISTINCT_CALLS } = require('../src/host')
 const isolatedFunction = require('..')()
 
 const [nodeMajor] = process.version.slice(1).split('.').map(Number)
@@ -780,7 +781,7 @@ test('a dial asked after the host call budget is spent is refused, not left wait
       timeout: 5000
     }
   )
-  const { isFulfilled, value } = await fn(require('../src/host').MAX_DISTINCT_CALLS)
+  const { isFulfilled, value } = await fn(MAX_DISTINCT_CALLS)
   t.true(isFulfilled, value && value.message)
   t.is(value, 'ERESERVEDADDRESSRANGE')
 })
