@@ -499,14 +499,32 @@ const fillsMemoryExactly = test.macro(async (t, character) => {
 test('answers that fill the memory exactly are kept', fillsMemoryExactly, 'x')
 test('characters up to U+00FF are charged one byte each', fillsMemoryExactly, '\u00ff')
 
-test('characters outside the BMP are charged two bytes per code unit', async t => {
+const chargedTwoBytesPerCodeUnit = test.macro(async (t, fitsAtOneByte) => {
   const { child, replies } = fakeChild()
-  const fitsAtOneByte = '\u{1f600}'.repeat(ONE_MB / 4)
-  attach(child, { astral: () => fitsAtOneByte }, { memory: 1 })
+  attach(child, { wide: () => fitsAtOneByte }, { memory: 1 })
 
-  child.emit('message', { id: 1, method: 'astral', args: [] })
+  child.emit('message', { id: 1, method: 'wide', args: [] })
   await settle()
 
+  t.deepEqual(replyTo(replies, 1), refused(1))
+})
+
+test(
+  'characters outside the BMP are charged two bytes per code unit',
+  chargedTwoBytesPerCodeUnit,
+  '\u{1f600}'.repeat(ONE_MB / 4)
+)
+test('U+FFFF is charged two bytes', chargedTwoBytesPerCodeUnit, 'x'.repeat(ONE_MB / 2 - 1) + '￿')
+
+test('wide characters in the arguments of a running call are charged two bytes', async t => {
+  const { child, replies } = fakeChild()
+  let calls = 0
+  attach(child, { wide: () => calls++ }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'wide', args: ['Ā'.repeat(ONE_MB / 2)] })
+  await settle()
+
+  t.is(calls, 0)
   t.deepEqual(replyTo(replies, 1), refused(1))
 })
 
