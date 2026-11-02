@@ -1,7 +1,20 @@
 'use strict'
 
+const { createHash } = require('crypto')
+
 const UNKNOWN_METHOD = 'the host does not expose this method'
 const UNSHAREABLE_ARGS = 'the host call arguments cannot be compared'
+const OVER_MEMORY = 'the host call results exceed the run memory limit'
+
+const BYTES_PER_MB = 1024 * 1024
+const BYTES_PER_REMEMBERED_CALL = 256
+
+const WIDE_CHARACTER = /[\u0100-\uffff]/
+const BYTES_PER_WIDE_CHARACTER = 2
+
+const storedBytes = text => (WIDE_CHARACTER.test(text) ? BYTES_PER_WIDE_CHARACTER : 1) * text.length
+
+const digest = call => createHash('sha256').update(call).digest('base64url')
 
 /**
  * Every inbound message is untrusted. The isolate runs third-party code and can
@@ -37,8 +50,22 @@ const describe = value => {
  */
 const absorbSendError = () => {}
 
-const attach = (subprocess, host) => {
-  const resolved = new Map()
+const failure = reason => JSON.stringify({ failed: true, reason })
+const UNKNOWN_METHOD_ANSWER = failure(UNKNOWN_METHOD)
+const UNSHAREABLE_ARGS_ANSWER = failure(UNSHAREABLE_ARGS)
+const OVER_MEMORY_ANSWER = failure(OVER_MEMORY)
+
+const attach = (subprocess, host, { memory } = {}) => {
+  const answers = new Map()
+  const limit = memory ? memory * BYTES_PER_MB : Infinity
+  let held = 0
+
+  const take = bytes => {
+    if (held + bytes > limit) return false
+    held += bytes
+    return true
+  }
+
   /**
    * Fixed when the run starts. A method added on `host` later is not reachable.
    * Bound to `host` so a method call still sees that object as `this`.
@@ -49,36 +76,59 @@ const attach = (subprocess, host) => {
   }
 
   /**
-   * A value the channel cannot carry, such as a BigInt, makes `send` throw. The
-   * isolate is waiting on this id and would otherwise wait until its timeout,
-   * so the failure is reported over the same reply.
+   * A value the channel cannot carry, such as a BigInt, fails its call rather
+   * than leaving the isolate waiting on this id until its timeout.
    */
-  const answer = (id, outcome) => {
+  const serialize = value => {
+    try {
+      return JSON.stringify({ value })
+    } catch (error) {
+      return failure(describe(error))
+    }
+  }
+
+  const answer = (id, text) => {
     if (!subprocess.connected) return
     try {
-      subprocess.send({ id, ...outcome }, absorbSendError)
-    } catch (error) {
-      if (outcome.failed) return
-      try {
-        subprocess.send({ id, failed: true, reason: describe(error) }, absorbSendError)
-      } catch {}
-    }
+      subprocess.send({ id, ...JSON.parse(text) }, absorbSendError)
+    } catch {}
+  }
+
+  /**
+   * An answer refused for space is not remembered: what else is running when it
+   * arrives decides the refusal, so a later ask runs the method again.
+   */
+  const forget = key => {
+    held -= BYTES_PER_REMEMBERED_CALL
+    answers.delete(key)
   }
 
   /** The same method and arguments resolve once, so asking twice costs one call. */
   const resolve = (fn, method, args) => {
-    let key
+    let call
     try {
-      key = `${method}:${JSON.stringify(args)}`
+      call = JSON.stringify([method, args])
     } catch {
-      return Promise.reject(new Error(UNSHAREABLE_ARGS))
+      return Promise.resolve(UNSHAREABLE_ARGS_ANSWER)
     }
 
-    const seen = resolved.get(key)
+    const key = digest(call)
+    const seen = answers.get(key)
     if (seen !== undefined) return seen
 
-    const pending = Promise.resolve().then(() => fn(...args))
-    resolved.set(key, pending)
+    const argumentBytes = storedBytes(call)
+    if (!take(BYTES_PER_REMEMBERED_CALL + argumentBytes)) return Promise.resolve(OVER_MEMORY_ANSWER)
+
+    const pending = Promise.resolve()
+      .then(() => fn(...args))
+      .then(serialize, error => failure(describe(error)))
+      .then(text => {
+        held -= argumentBytes
+        if (take(storedBytes(text))) return text
+        forget(key)
+        return OVER_MEMORY_ANSWER
+      })
+    answers.set(key, pending)
     return pending
   }
 
@@ -87,15 +137,18 @@ const attach = (subprocess, host) => {
     const { id, method, args = [] } = message
 
     const fn = exposed.get(method)
-    if (fn === undefined) return answer(id, { failed: true, reason: UNKNOWN_METHOD })
+    if (fn === undefined) return answer(id, UNKNOWN_METHOD_ANSWER)
 
     resolve(fn, method, args)
-      .then(
-        value => answer(id, { value }),
-        error => answer(id, { failed: true, reason: describe(error) })
-      )
+      .then(text => answer(id, text))
       .catch(() => {})
   })
 }
 
-module.exports = { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE }
+module.exports = {
+  attach,
+  UNKNOWN_METHOD,
+  UNSHAREABLE_ARGS,
+  INDESCRIBABLE,
+  OVER_MEMORY
+}

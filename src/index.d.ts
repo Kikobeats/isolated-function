@@ -126,7 +126,7 @@ export type HostCall = (method: string, args?: unknown[]) => Promise<unknown>
 export interface IsolatedFunctionOptions {
   /** Execution timeout in milliseconds. Also enforces a CPU time limit via RLIMIT_CPU. */
   timeout?: number
-  /** Memory limit in megabytes. Bounds the V8 heap. On Linux, when `sh` is on PATH, also sets a virtual-memory ceiling above that. */
+  /** Memory limit in megabytes. Bounds the V8 heap. On Linux, when `sh` is on PATH, also sets a virtual-memory ceiling above that. With `host` or `ssrf`, also bounds what the host keeps for the run. */
   memory?: number
   /** When false, returns the error instead of throwing it */
   throwError?: boolean
@@ -154,7 +154,8 @@ export interface IsolatedFunctionOptions {
    * Methods the snippet can call on the host, as `globalThis.__isolated_host(name, args?)`.
    * Each is resolved when the snippet asks for it and never before, so work the
    * snippet does not reach costs nothing. The same method and arguments resolve
-   * once per run.
+   * once per run. What the host keeps counts against `memory`; past it, a new
+   * call rejects while a call already answered still answers.
    *
    * The isolate runs untrusted code and can write to the channel descriptor
    * directly, so treat every argument as untrusted input: a message proves that

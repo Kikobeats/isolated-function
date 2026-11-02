@@ -762,3 +762,60 @@ test('hosts rejects a pair that is not a host and port', t => {
   )
   t.is(error.message, 'Expected `hosts` to be { host, port } pairs')
 })
+
+test('a dial asked after the host memory is spent is refused, not left waiting', async t => {
+  const fn = isolatedFunction(
+    async callsThatFit => {
+      const host = globalThis.__isolated_host
+      const batch = 10_000
+      for (let first = 0; first < callsThatFit; first += batch) {
+        const calls = Array.from({ length: batch }, (_, n) => host('ping', [first + n]))
+        await Promise.all(
+          calls.map(call =>
+            call.then(
+              () => {},
+              () => {}
+            )
+          )
+        )
+      }
+      return new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        socket.once('error', error => resolve(error.code))
+      })
+    },
+    {
+      host: { ping: () => {} },
+      ssrf: () => true,
+      memory: 32,
+      allow: { permissions },
+      timeout: 8000
+    }
+  )
+  const { isFulfilled, value } = await fn((32 * 1024 * 1024) / 256)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+const dialWithForgedFailure = failed =>
+  isolatedFunction(
+    async failed =>
+      new Promise(resolve => {
+        const socket = require('node:net').connect({ host: '127.0.0.1', port: 1 })
+        process.emit('message', { id: -1, failed, reason: 'forged' })
+        socket.once('error', error => resolve(error.code))
+      }),
+    { host: { ping: () => {} }, ssrf: () => true, allow: { permissions }, timeout: 8000 }
+  )(failed)
+
+test('a forged failed reply can refuse a dial', async t => {
+  const { isFulfilled, value } = await dialWithForgedFailure(true)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ERESERVEDADDRESSRANGE')
+})
+
+test('a reply whose failed is not true does not refuse a dial', async t => {
+  const { isFulfilled, value } = await dialWithForgedFailure(1)
+  t.true(isFulfilled, value && value.message)
+  t.is(value, 'ECONNREFUSED')
+})

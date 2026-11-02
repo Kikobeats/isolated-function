@@ -1,9 +1,16 @@
 'use strict'
 
 const { EventEmitter } = require('events')
+const { execFileSync } = require('child_process')
 const { default: test } = require('ava')
 
-const { attach, UNKNOWN_METHOD, UNSHAREABLE_ARGS, INDESCRIBABLE } = require('../src/host')
+const {
+  attach,
+  UNKNOWN_METHOD,
+  UNSHAREABLE_ARGS,
+  INDESCRIBABLE,
+  OVER_MEMORY
+} = require('../src/host')
 const isolatedFunction = require('..')()
 
 const NOT_AN_ERROR = null
@@ -340,11 +347,351 @@ test('arguments that cannot be keyed do not reach the host', async t => {
   child.send = message => {
     replies.push(message)
   }
-  attach(child, { ping: () => calls++ }, { maxCalls: 1 })
+  attach(child, { ping: () => calls++ })
   const args = []
   args.push(args)
   child.emit('message', { id: 1, method: 'ping', args })
   await Promise.resolve()
   t.is(calls, 0)
   t.deepEqual(replies, [{ id: 1, failed: true, reason: UNSHAREABLE_ARGS }])
+})
+
+const fakeChild = () => {
+  const child = new EventEmitter()
+  const replies = []
+  child.connected = true
+  child.send = (message, written) => {
+    replies.push(message)
+    written()
+  }
+  return { child, replies }
+}
+
+const settle = () => new Promise(resolve => setImmediate(resolve))
+
+const retainedBytes = ({ host, argsOf, calls, memory }) =>
+  Number(
+    execFileSync(process.execPath, [
+      '--expose-gc',
+      '-e',
+      `
+      const { EventEmitter } = require('events')
+      const { attach } = require(${JSON.stringify(require.resolve('../src/host'))})
+      const child = new EventEmitter()
+      child.connected = true
+      child.send = (message, written) => written()
+      attach(child, { call: ${host} }, { memory: ${memory} })
+      const argsOf = ${argsOf}
+      global.gc()
+      const before = process.memoryUsage().heapUsed
+      for (let id = 0; id < ${calls}; id++) {
+        child.emit('message', { id, method: 'call', args: argsOf(id) })
+      }
+      setImmediate(() => setImmediate(() => {
+        global.gc()
+        process.stdout.write(String(process.memoryUsage().heapUsed - before))
+      }))
+      `
+    ])
+  )
+
+const MEMORY_MB = 8
+const withinMemory = (t, bytes) =>
+  t.true(bytes < (MEMORY_MB + 2) * 1024 * 1024, `${bytes} bytes retained`)
+
+test('large arguments are not kept once their call is answered', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: "async () => 'html'",
+      argsOf: "id => ['x'.repeat(4 * 1024 * 1024) + id]",
+      calls: 40,
+      memory: 'undefined'
+    })
+  )
+})
+
+test('what a failed call threw is not kept beyond the memory', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'input => new URL(input).href',
+      argsOf: "id => ['x'.repeat(1024 * 1024) + id]",
+      calls: 40,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('arguments of calls still running count against the memory', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'async input => { await new Promise(resolve => setTimeout(resolve, 60000).unref()); return input }',
+      argsOf: "id => ['x'.repeat(64 * 1024) + id]",
+      calls: 1000,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('results that weigh more in memory than their size are kept as their answer', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'rows => Array.from({ length: rows }, () => ({}))',
+      argsOf: 'id => [100000 + id]',
+      calls: 200,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('wide characters are charged for the bytes they take', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: "id => '語'.repeat(512 * 1024) + id",
+      argsOf: 'id => [id]',
+      calls: 40,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+const ONE_MB = 1024 * 1024
+const megabyteResult = n => 'x'.repeat(ONE_MB) + n
+const replyTo = (replies, id) => replies.find(reply => reply.id === id)
+const refused = id => ({ id, failed: true, reason: OVER_MEMORY })
+
+test('the results a run keeps stay within its memory, and repeats still answer', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { big: megabyteResult }, { memory: 4 })
+
+  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
+  await settle()
+  child.emit('message', { id: 7, method: 'big', args: [1] })
+  await settle()
+
+  for (const id of [1, 2, 3]) {
+    t.is(replyTo(replies, id).value, megabyteResult(id))
+  }
+  for (const id of [4, 5, 6]) {
+    t.deepEqual(replyTo(replies, id), refused(id))
+  }
+  t.is(replyTo(replies, 7).value, megabyteResult(1))
+})
+
+const fillsMemoryExactly = test.macro(async (t, character) => {
+  const { child, replies } = fakeChild()
+  const answerWrapping = JSON.stringify({ value: '' }).length
+  const halfFit = character.repeat(ONE_MB / 2 - 256 - answerWrapping)
+  attach(child, { fill: () => halfFit }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'fill', args: [1] })
+  child.emit('message', { id: 2, method: 'fill', args: [2] })
+  await settle()
+
+  t.is(replyTo(replies, 1).value, halfFit)
+  t.is(replyTo(replies, 2).value, halfFit)
+})
+
+test('answers that fill the memory exactly are kept', fillsMemoryExactly, 'x')
+test('characters up to U+00FF are charged one byte each', fillsMemoryExactly, '\u00ff')
+
+const chargedTwoBytesPerCodeUnit = test.macro(async (t, fitsAtOneByte) => {
+  const { child, replies } = fakeChild()
+  attach(child, { wide: () => fitsAtOneByte }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'wide', args: [] })
+  await settle()
+
+  t.deepEqual(replyTo(replies, 1), refused(1))
+})
+
+test(
+  'characters outside the BMP are charged two bytes per code unit',
+  chargedTwoBytesPerCodeUnit,
+  '\u{1f600}'.repeat(ONE_MB / 4)
+)
+test(
+  'U+FFFF is charged two bytes',
+  chargedTwoBytesPerCodeUnit,
+  'x'.repeat(ONE_MB / 2 - 1) + String.fromCharCode(0xffff)
+)
+
+test('wide characters in the arguments of a running call are charged two bytes', async t => {
+  const { child, replies } = fakeChild()
+  let calls = 0
+  attach(child, { wide: () => calls++ }, { memory: 1 })
+
+  child.emit('message', { id: 1, method: 'wide', args: ['Ā'.repeat(ONE_MB / 2)] })
+  await settle()
+
+  t.is(calls, 0)
+  t.deepEqual(replyTo(replies, 1), refused(1))
+})
+
+test('repeating a large answer many times at once still answers every call', async t => {
+  const config = { flags: { a: true }, blob: 'x'.repeat(300 * 1024) }
+  const fn = isolatedFunction(
+    async () => {
+      const host = globalThis.__isolated_host
+      const flags = await Promise.all(
+        Array.from({ length: 300 }, () => host('config').then(answer => answer.flags.a))
+      )
+      return flags.every(flag => flag === true)
+    },
+    { host: { config: () => config }, memory: 64, timeout: 10000 }
+  )
+  const { isFulfilled, value } = await fn()
+  t.true(isFulfilled)
+  t.true(value)
+})
+
+test('a string stored two bytes per character is charged for both', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: "id => 'x'.repeat(64 * 1024) + 'Ā' + id",
+      argsOf: 'id => [id]',
+      calls: 512,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('an answer refused while other calls run is answered when asked again', async t => {
+  const { child, replies } = fakeChild()
+  const halfMemory = 'x'.repeat(ONE_MB / 2 + 1024)
+  let finishSlow
+  attach(
+    child,
+    {
+      slow: () => new Promise(resolve => (finishSlow = resolve)),
+      fast: () => halfMemory
+    },
+    { memory: 1 }
+  )
+
+  child.emit('message', { id: 1, method: 'slow', args: [halfMemory] })
+  child.emit('message', { id: 2, method: 'fast', args: [] })
+  await settle()
+  finishSlow()
+  await settle()
+  child.emit('message', { id: 3, method: 'fast', args: [] })
+  await settle()
+
+  t.deepEqual(replyTo(replies, 2), refused(2))
+  t.is(replyTo(replies, 1).value, undefined)
+  t.is(replyTo(replies, 3).value, halfMemory)
+})
+
+test('asking again for an answer that never fits does not use up the memory', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { huge: () => 'x'.repeat(ONE_MB), small: () => 'ok' }, { memory: 1 })
+
+  const moreAsksThanRememberedCallsFit = ONE_MB / 256 + 100
+  for (let id = 1; id <= moreAsksThanRememberedCallsFit; id++) {
+    child.emit('message', { id, method: 'huge', args: [] })
+    await settle()
+  }
+  child.emit('message', { id: 0, method: 'small', args: [] })
+  await settle()
+
+  t.is(replyTo(replies, 0).value, 'ok')
+})
+
+const keepsEveryResult = test.macro(async (t, options) => {
+  const { child, replies } = fakeChild()
+  attach(child, { big: megabyteResult }, options)
+
+  for (let id = 1; id <= 6; id++) child.emit('message', { id, method: 'big', args: [id] })
+  await settle()
+
+  t.deepEqual(
+    replies.map(reply => reply.failed),
+    Array(6).fill(undefined)
+  )
+})
+
+test('a run without memory keeps every result', keepsEveryResult, undefined)
+test(
+  'a run with memory 0 keeps every result, as its heap is not limited either',
+  keepsEveryResult,
+  { memory: 0 }
+)
+
+test('remembering a call costs memory even when its result is empty', async t => {
+  const { child, replies } = fakeChild()
+  let calls = 0
+  attach(
+    child,
+    {
+      ping: () => {
+        calls++
+      }
+    },
+    { memory: 1 }
+  )
+
+  const callsAtMostThatFit = ONE_MB / 256
+  const batch = 1000
+  for (let id = 0; id < callsAtMostThatFit; id++) {
+    child.emit('message', { id, method: 'ping', args: [id] })
+    if (id % batch === 0) await settle()
+  }
+  await settle()
+
+  const refusedReplies = replies.filter(reply => reply.failed)
+  t.true(refusedReplies.length > 0)
+  t.true(refusedReplies.every(reply => reply.reason === OVER_MEMORY))
+  t.is(calls + refusedReplies.length, callsAtMostThatFit)
+})
+
+test('the memory option reaches the host channel', async t => {
+  const fn = isolatedFunction(
+    async () => {
+      const host = globalThis.__isolated_host
+      const calls = Array.from({ length: 10 }, (_, n) =>
+        host('big', [n]).then(
+          () => true,
+          error => error.message
+        )
+      )
+      return Promise.all(calls)
+    },
+    { host: { big: n => 'x'.repeat(4 * ONE_MB) + n }, memory: 32, timeout: 10000 }
+  )
+  const { value } = await fn()
+  t.deepEqual(value, [...Array(7).fill(true), ...Array(3).fill(OVER_MEMORY)])
+})
+
+test('calls whose arguments differ only in a long tail are still told apart', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { echo: tail => tail.slice(-1) })
+  const prefix = 'x'.repeat(1024 * 1024)
+
+  child.emit('message', { id: 1, method: 'echo', args: [prefix + 'a'] })
+  child.emit('message', { id: 2, method: 'echo', args: [prefix + 'b'] })
+  await settle()
+
+  t.deepEqual(replies, [
+    { id: 1, value: 'a' },
+    { id: 2, value: 'b' }
+  ])
+})
+
+test('the same arguments under different methods are told apart', async t => {
+  const { child, replies } = fakeChild()
+  attach(child, { one: () => 1, two: () => 2 })
+
+  child.emit('message', { id: 1, method: 'one', args: [] })
+  child.emit('message', { id: 2, method: 'two', args: [] })
+  await settle()
+
+  t.deepEqual(replies, [
+    { id: 1, value: 1 },
+    { id: 2, value: 2 }
+  ])
 })

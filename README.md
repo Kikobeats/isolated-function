@@ -403,7 +403,7 @@ const isolatedFunction = require('isolated-function')({
 Type: `number`<br>
 Default: `Infinity`
 
-Set the function memory limit, in megabytes. This bounds the V8 heap. On Linux, when `sh` is on `PATH`, it also sets a virtual-memory ceiling above that limit.
+Set the function memory limit, in megabytes. This bounds the V8 heap. On Linux, when `sh` is on `PATH`, it also sets a virtual-memory ceiling above that limit. With [host](#host) or `ssrf` set, it also bounds what the host keeps for the run.
 
 #### throwError
 
@@ -446,7 +446,15 @@ import { HostCall } from 'isolated-function'
 const { __isolated_host: host } = globalThis as unknown as { __isolated_host: HostCall }
 ```
 
-The same method and arguments resolve once per run, so asking twice costs one resolution.
+The same method and arguments resolve once per run, so asking twice costs one resolution. What the host keeps for a run counts against its [memory](#memory):
+
+- Each answer is kept as the JSON it is sent as, and charged an estimate of the bytes V8 stores that JSON string in.
+- Each remembered call costs 256 bytes. Calls are remembered by a fixed-size digest of their method and arguments, so large arguments are not held after their call is answered.
+- A call still running is also charged the size of its arguments until it answers.
+- Replies on their way to the isolate are not counted: they leave the host as fast as the isolate reads them.
+- With `ssrf` set, each distinct address, port, and name a dial checks is a remembered call.
+
+Once that reaches `memory`, a new call, or one whose answer does not fit, rejects with `the host call results exceed the run memory limit`, and a dial needing a new check is refused. A call already answered still answers. An answer refused for space is not remembered, so the next identical ask runs the method again. Without `memory`, what the host keeps is not limited.
 
 Passing `host` opens an IPC channel to the child. The isolate runs untrusted code and can write to that channel descriptor directly, so treat every argument as untrusted input: a message proves that something in the child asked, never that your code asked. A method absent from `host` is refused without being reached, and a malformed message is ignored.
 

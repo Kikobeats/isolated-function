@@ -84,6 +84,10 @@ const install = (method, publicKey, encode, hosts, denied) => {
   process.on('message', reply => {
     if (!reply || !pending.has(reply.id)) return
     const waiting = pending.get(reply.id)
+    if (reply.failed === true) {
+      pending.delete(reply.id)
+      return waiting.reject(new Error(reply.reason))
+    }
     const body = reply.value
     if (body === null || typeof body !== 'object') return
     const allow = body.allow === true
