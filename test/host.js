@@ -514,7 +514,11 @@ test(
   chargedTwoBytesPerCodeUnit,
   '\u{1f600}'.repeat(ONE_MB / 4)
 )
-test('U+FFFF is charged two bytes', chargedTwoBytesPerCodeUnit, 'x'.repeat(ONE_MB / 2 - 1) + '￿')
+test(
+  'U+FFFF is charged two bytes',
+  chargedTwoBytesPerCodeUnit,
+  'x'.repeat(ONE_MB / 2 - 1) + String.fromCharCode(0xffff)
+)
 
 test('wide characters in the arguments of a running call are charged two bytes', async t => {
   const { child, replies } = fakeChild()
