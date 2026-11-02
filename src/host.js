@@ -8,6 +8,7 @@ const OVER_MEMORY = 'the host call results exceed the run memory limit'
 
 const BYTES_PER_MB = 1024 * 1024
 const BYTES_PER_REMEMBERED_CALL = 256
+const BYTES_PER_UNREAD_REPLY = 512
 
 const WIDE_CHARACTER = /[\u0100-\uffff]/
 const BYTES_PER_WIDE_CHARACTER = 2
@@ -80,19 +81,24 @@ const attach = (subprocess, host, { memory } = {}) => {
     }
   }
 
-  let unwritten = 0
+  let unread = 0
+  let outOfMemory = false
+
+  const exceedMemory = () => {
+    outOfMemory = true
+    subprocess.kill('SIGKILL')
+  }
 
   const answer = (id, text) => {
     if (!subprocess.connected) return
-    const bytes = Buffer.byteLength(text)
-    const fits = unwritten + bytes <= limit
-    const charged = fits ? bytes : 0
+    const bytes = BYTES_PER_UNREAD_REPLY + Buffer.byteLength(text)
+    if (unread + bytes > limit) return exceedMemory()
+    unread += bytes
     const written = () => {
-      unwritten -= charged
+      unread -= bytes
     }
-    unwritten += charged
     try {
-      subprocess.send({ id, ...JSON.parse(fits ? text : OVER_MEMORY_ANSWER) }, written)
+      subprocess.send({ id, ...JSON.parse(text) }, written)
     } catch {
       written()
     }
@@ -136,6 +142,8 @@ const attach = (subprocess, host, { memory } = {}) => {
       .then(text => answer(id, text))
       .catch(() => {})
   })
+
+  return { outOfMemory: () => outOfMemory }
 }
 
 module.exports = {

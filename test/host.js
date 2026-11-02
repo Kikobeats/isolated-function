@@ -482,42 +482,66 @@ test('the results a run keeps stay within its memory, and repeats still answer',
   t.is(replyTo(replies, 7).value, megabyteResult(1))
 })
 
-test('a result that fills the memory exactly is kept', async t => {
+test('answers that fill the memory exactly are kept', async t => {
   const { child, replies } = fakeChild()
   const answerWrapping = JSON.stringify({ value: '' }).length
-  const exactFit = 'x'.repeat(ONE_MB - 256 - answerWrapping)
-  attach(child, { fill: () => exactFit }, { memory: 1 })
+  const halfFit = 'x'.repeat(ONE_MB / 2 - 256 - answerWrapping)
+  attach(child, { fill: () => halfFit }, { memory: 1 })
 
-  child.emit('message', { id: 1, method: 'fill', args: [] })
+  child.emit('message', { id: 1, method: 'fill', args: [1] })
+  child.emit('message', { id: 2, method: 'fill', args: [2] })
   await settle()
 
-  t.is(replyTo(replies, 1).value, exactFit)
+  t.is(replyTo(replies, 1).value, halfFit)
+  t.is(replyTo(replies, 2).value, halfFit)
 })
 
 test('replies the isolate has not read count against its memory', async t => {
   const { child, replies } = fakeChild()
-  const unread = []
-  child.send = (message, written) => {
-    replies.push(message)
-    unread.push(written)
-  }
+  child.send = message => replies.push(message)
+  const killedWith = []
+  child.kill = signal => killedWith.push(signal)
+  const replyOverhead = 512
   const answerWrapping = JSON.stringify({ value: '' }).length
-  const twoMegabytes = 'x'.repeat(2 * ONE_MB - answerWrapping)
-  attach(child, { big: () => twoMegabytes }, { memory: 8 })
+  const twoMegabyteReply = 'x'.repeat(2 * ONE_MB - replyOverhead - answerWrapping)
+  const channel = attach(child, { big: () => twoMegabyteReply }, { memory: 8 })
 
-  for (let id = 1; id <= 5; id++) child.emit('message', { id, method: 'big', args: [] })
+  for (let id = 1; id <= 4; id++) child.emit('message', { id, method: 'big', args: [] })
+  await settle()
+  t.is(replies.length, 4)
+  t.false(channel.outOfMemory())
+
+  child.emit('message', { id: 5, method: 'big', args: [] })
+  await settle()
+  t.is(replies.length, 4)
+  t.true(channel.outOfMemory())
+  t.deepEqual(killedWith, ['SIGKILL'])
+})
+
+test('a reply the isolate has read no longer counts against its memory', async t => {
+  const { child, replies } = fakeChild()
+  const channel = attach(child, { big: () => 'x'.repeat(2 * ONE_MB) }, { memory: 8 })
+
+  for (let id = 1; id <= 20; id++) child.emit('message', { id, method: 'big', args: [] })
   await settle()
 
-  t.deepEqual(
-    replies.map(reply => reply.failed === true),
-    [false, false, false, false, true]
+  t.is(replies.length, 20)
+  t.false(channel.outOfMemory())
+})
+
+test('a run whose unread replies exceed its memory fails as out of memory', async t => {
+  const eightMegabytes = 'x'.repeat(8 * ONE_MB)
+  const fn = isolatedFunction(
+    () => {
+      for (let call = 0; call < 10; call++) globalThis.__isolated_host('big').catch(() => {})
+      const end = Date.now() + 5000
+      while (Date.now() < end);
+    },
+    { host: { big: () => eightMegabytes }, memory: 32, timeout: 10000 }
   )
-
-  for (const written of unread.splice(0)) written()
-  child.emit('message', { id: 6, method: 'big', args: [] })
-  await settle()
-
-  t.is(replyTo(replies, 6).value, twoMegabytes)
+  const error = await t.throwsAsync(fn())
+  t.is(error.name, 'MemoryError')
+  t.is(error.message, 'Out of memory')
 })
 
 test('a string stored two bytes per character is charged for both', t => {

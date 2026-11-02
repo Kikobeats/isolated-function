@@ -176,6 +176,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
 
     return async (...args) => {
       let total
+      let hostChannel
       try {
         total = timeSpan()
         const compiled = await compilePromise
@@ -195,7 +196,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           hasHost,
           memory
         })
-        if (hasHost) attachHost(subprocess, ipcHost, { memory })
+        if (hasHost) hostChannel = attachHost(subprocess, ipcHost, { memory })
         subprocess.stdin?.on('error', () => {})
         Readable.from([prelude, compiled.content]).pipe(subprocess.stdin)
         const { stdout } = await subprocess
@@ -233,7 +234,11 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         debug.error(serializeError(error))
         const profiling = { phases: { total: total() } }
 
-        if (isOutOfMemory(error) || (error.signalCode === 'SIGKILL' && !error.killed)) {
+        if (
+          isOutOfMemory(error) ||
+          hostChannel?.outOfMemory() ||
+          (error.signalCode === 'SIGKILL' && !error.killed)
+        ) {
           throw createError({
             name: 'MemoryError',
             message: 'Out of memory',
