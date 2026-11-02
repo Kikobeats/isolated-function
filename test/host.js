@@ -518,6 +518,19 @@ test('replies the isolate has not read count against its memory', async t => {
   t.deepEqual(killedWith, ['SIGKILL'])
 })
 
+test('every unread reply costs memory, however small', async t => {
+  const { child, replies } = fakeChild()
+  child.send = message => replies.push(message)
+  child.kill = () => {}
+  const channel = attach(child, { one: () => 1 }, { memory: 1 })
+
+  for (let id = 1; id <= 3000; id++) child.emit('message', { id, method: 'one', args: [] })
+  await settle()
+
+  t.true(replies.length < 3000)
+  t.true(channel.outOfMemory())
+})
+
 test('a reply the isolate has read no longer counts against its memory', async t => {
   const { child, replies } = fakeChild()
   const channel = attach(child, { big: () => 'x'.repeat(2 * ONE_MB) }, { memory: 8 })
