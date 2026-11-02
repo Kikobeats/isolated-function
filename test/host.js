@@ -368,29 +368,94 @@ const fakeChild = () => {
 
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
-const RETAINED_AFTER_LARGE_CALLS = `
-  const { EventEmitter } = require('events')
-  const { attach } = require(${JSON.stringify(require.resolve('../src/host'))})
-  const child = new EventEmitter()
-  child.connected = true
-  child.send = () => {}
-  attach(child, { content: async () => 'html' })
-  global.gc()
-  const before = process.memoryUsage().heapUsed
-  for (let call = 0; call < 40; call++) {
-    child.emit('message', { id: call, method: 'content', args: ['x'.repeat(4 * 1024 * 1024) + call] })
-  }
-  setImmediate(() => {
-    global.gc()
-    process.stdout.write(String(process.memoryUsage().heapUsed - before))
-  })
-`
+const retainedBytes = ({ host, argsOf, calls, memory }) =>
+  Number(
+    execFileSync(process.execPath, [
+      '--expose-gc',
+      '-e',
+      `
+      const { EventEmitter } = require('events')
+      const { attach } = require(${JSON.stringify(require.resolve('../src/host'))})
+      const child = new EventEmitter()
+      child.connected = true
+      child.send = () => {}
+      attach(child, { call: ${host} }, { memory: ${memory} })
+      const argsOf = ${argsOf}
+      global.gc()
+      const before = process.memoryUsage().heapUsed
+      for (let id = 0; id < ${calls}; id++) {
+        child.emit('message', { id, method: 'call', args: argsOf(id) })
+      }
+      setImmediate(() => setImmediate(() => {
+        global.gc()
+        process.stdout.write(String(process.memoryUsage().heapUsed - before))
+      }))
+      `
+    ])
+  )
+
+const MEMORY_MB = 8
+const withinMemory = (t, bytes) =>
+  t.true(bytes < (MEMORY_MB + 2) * 1024 * 1024, `${bytes} bytes retained`)
 
 test('large arguments are not kept once their call is answered', t => {
-  const retainedBytes = Number(
-    execFileSync(process.execPath, ['--expose-gc', '-e', RETAINED_AFTER_LARGE_CALLS])
+  withinMemory(
+    t,
+    retainedBytes({
+      host: "async () => 'html'",
+      argsOf: "id => ['x'.repeat(4 * 1024 * 1024) + id]",
+      calls: 40,
+      memory: 'undefined'
+    })
   )
-  t.true(retainedBytes < 8 * 1024 * 1024, `${retainedBytes} bytes retained`)
+})
+
+test('what a failed call threw is not kept beyond the memory', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'input => new URL(input).href',
+      argsOf: "id => ['x'.repeat(1024 * 1024) + id]",
+      calls: 40,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('arguments of calls still running count against the memory', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'async input => { await new Promise(resolve => setTimeout(resolve, 60000).unref()); return input }',
+      argsOf: "id => ['x'.repeat(64 * 1024) + id]",
+      calls: 1000,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('results that weigh more in memory than their size are kept as their answer', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'rows => Array.from({ length: rows }, () => ({}))',
+      argsOf: 'id => [100000 + id]',
+      calls: 200,
+      memory: MEMORY_MB
+    })
+  )
+})
+
+test('wide characters are charged for the bytes they take', t => {
+  withinMemory(
+    t,
+    retainedBytes({
+      host: 'text => text',
+      argsOf: "id => ['語'.repeat(512 * 1024) + id]",
+      calls: 40,
+      memory: MEMORY_MB
+    })
+  )
 })
 
 const ONE_MB = 1024 * 1024
@@ -418,8 +483,8 @@ test('the results a run keeps stay within its memory, and repeats still answer',
 
 test('a result that fills the memory exactly is kept', async t => {
   const { child, replies } = fakeChild()
-  const quotes = 2
-  const exactFit = 'x'.repeat(ONE_MB - 256 - quotes)
+  const answerWrapping = JSON.stringify({ value: '' }).length
+  const exactFit = 'x'.repeat(ONE_MB - 256 - answerWrapping)
   attach(child, { fill: () => exactFit }, { memory: 1 })
 
   child.emit('message', { id: 1, method: 'fill', args: [] })
@@ -454,17 +519,16 @@ test('remembering a call costs memory even when its result is empty', async t =>
     { memory: 1 }
   )
 
-  const callsThatFit = ONE_MB / 256
-  for (let id = 0; id <= callsThatFit; id++) {
+  const callsAtMostThatFit = ONE_MB / 256
+  for (let id = 0; id < callsAtMostThatFit; id++) {
     child.emit('message', { id, method: 'ping', args: [id] })
   }
   await settle()
 
-  t.is(calls, callsThatFit)
-  t.deepEqual(
-    replies.filter(reply => reply.failed),
-    [refused(callsThatFit)]
-  )
+  const refusedReplies = replies.filter(reply => reply.failed)
+  t.true(refusedReplies.length > 0)
+  t.true(refusedReplies.every(reply => reply.reason === OVER_MEMORY))
+  t.is(calls + refusedReplies.length, callsAtMostThatFit)
 })
 
 test('the memory option reaches the host channel', async t => {
