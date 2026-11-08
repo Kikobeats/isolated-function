@@ -13,9 +13,7 @@ module.exports = (code, requireAs = new Map()) => {
   const replacements = []
   walkSpecifiers(code, (specifier, node) => {
     const name = moduleName(specifier)
-    if (name && (name !== specifier || node.type === 'TemplateLiteral')) {
-      replacements.push({ start: node.start, end: node.end, name })
-    }
+    if (name && name !== specifier) replacements.push({ start: node.start, end: node.end, name })
   })
 
   let newCode = ''

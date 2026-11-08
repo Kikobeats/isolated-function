@@ -26,19 +26,11 @@ const literalSpecifiers = content => {
 
 const isRuntimeModule = specifier => specifier.startsWith('node:') || isBuiltinModule(specifier)
 
-const entryFile = cwd => path.resolve(cwd, ENTRY)
-
-const fromEntry = (importer, entry) => importer === entry
-
 const onlyLiteralSpecifiers = (entry, specifiers) => ({
   name: 'isolated-function:literal-specifiers',
   setup (build) {
     build.onResolve({ filter: /.*/ }, args => {
-      if (
-        !fromEntry(args.importer, entry) ||
-        specifiers.has(args.path) ||
-        isRuntimeModule(args.path)
-      ) {
+      if (args.importer !== entry || specifiers.has(args.path) || isRuntimeModule(args.path)) {
         return
       }
       return {
@@ -49,7 +41,7 @@ const onlyLiteralSpecifiers = (entry, specifiers) => ({
 })
 
 module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts = {} } = {}) => {
-  const entry = entryFile(cwd)
+  const entry = path.resolve(cwd, ENTRY)
   return esbuild.build({
     stdin: {
       contents: content,

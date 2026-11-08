@@ -89,6 +89,15 @@ test('keeps the subpath after an alias name', t => {
   )
 })
 
+test('leaves a specifier that already matches its alias', t => {
+  const code = 'const five = require("is-number@5.0.0");'
+  const template = 'const five = require(`is-number@5.0.0`);'
+  const requireAs = new Map([['is-number@5.0.0', 'is-number@5.0.0']])
+
+  t.is(transformDependencies(code, requireAs), code)
+  t.is(transformDependencies(template, requireAs), template)
+})
+
 test('keeps a star range subpath and rewrites require.resolve', t => {
   const code = `
     const fp = require('lodash@4.*/fp');
