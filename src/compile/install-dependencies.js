@@ -4,6 +4,8 @@ const { globSync, readFileSync, realpathSync, writeFileSync } = require('fs')
 const { add } = require('upm')
 const path = require('path')
 
+const parseSpecifier = require('./parse-specifier')
+
 const {
   DependencyConflictError,
   DependencyNameError,
@@ -18,23 +20,7 @@ const ensurePackageJson = cwd => {
   }
 }
 
-const extractPackageName = dependency => {
-  if (dependency.startsWith('@')) {
-    const slashIndex = dependency.indexOf('/')
-    if (slashIndex !== -1) {
-      const atVersionIndex = dependency.indexOf('@', slashIndex)
-      if (atVersionIndex !== -1) {
-        return dependency.substring(0, atVersionIndex)
-      }
-    }
-  } else {
-    const atVersionIndex = dependency.indexOf('@')
-    if (atVersionIndex !== -1) {
-      return dependency.substring(0, atVersionIndex)
-    }
-  }
-  return dependency
-}
+const extractPackageName = dependency => parseSpecifier(dependency).name
 
 const aliasVersion = version =>
   version.replace(/[^A-Za-z0-9.]/g, char => `_${char.codePointAt(0).toString(16)}_`)

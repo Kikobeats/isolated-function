@@ -54,3 +54,37 @@ test('detect imports', t => {
     import isString from 'is-string';`
   )
 })
+
+test('keeps the subpath after removing the version', t => {
+  const code = `
+    const fp = require('lodash@4.17.21/fp');
+    const timeSpan = require('@kikobeats/time-span@1.0.5/src/index.js');
+    import get from 'lodash/get';
+    const one = require(1);`
+
+  t.is(
+    transformDependencies(code),
+    `
+    const fp = require('lodash/fp');
+    const timeSpan = require('@kikobeats/time-span/src/index.js');
+    import get from 'lodash/get';
+    const one = require(1);`
+  )
+})
+
+test('keeps the subpath after an alias name', t => {
+  const code = `
+    const five = require('is-number@5.0.0/index.js');
+    const six = require('is-number@6.0.0');`
+  const requireAs = new Map([
+    ['is-number@5.0.0', 'is-number-5.0.0'],
+    ['is-number@6.0.0', 'is-number-6.0.0']
+  ])
+
+  t.is(
+    transformDependencies(code, requireAs),
+    `
+    const five = require('is-number-5.0.0/index.js');
+    const six = require('is-number-6.0.0');`
+  )
+})

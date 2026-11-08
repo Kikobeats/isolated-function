@@ -3,6 +3,8 @@
 const walk = require('acorn-walk')
 const acorn = require('acorn')
 
+const parseSpecifier = require('./parse-specifier')
+
 /**
  * Transforms dependency module names by removing version specifiers.
  *
@@ -28,18 +30,11 @@ module.exports = (code, requireAs = new Map()) => {
   let newCode = ''
   let lastIndex = 0
 
-  // Helper function to process and transform nodes
   const moduleName = value => {
-    const mapped = requireAs.get(value)
-    if (mapped) return mapped
-    if (typeof value !== 'string' || !value.includes('@')) return
-    if (value.startsWith('@')) {
-      const slashIndex = value.indexOf('/')
-      if (slashIndex === -1) return
-      const atVersionIndex = value.indexOf('@', slashIndex)
-      return atVersionIndex === -1 ? undefined : value.substring(0, atVersionIndex)
-    }
-    return value.split('@')[0]
+    if (typeof value !== 'string') return
+    const { name, version, subpath } = parseSpecifier(value)
+    if (version === undefined) return
+    return `${requireAs.get(`${name}@${version}`) ?? name}${subpath}`
   }
 
   const processNode = node => {

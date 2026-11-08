@@ -72,7 +72,8 @@ module.exports = code => {
       if (
         node.callee.name === 'require' &&
         node.arguments.length === 1 &&
-        node.arguments[0].type === 'Literal'
+        node.arguments[0].type === 'Literal' &&
+        typeof node.arguments[0].value === 'string'
       ) {
         const dependency = node.arguments[0].value
         if (!isBuiltinModule(dependency)) dependencies.add(parseDependency(dependency))

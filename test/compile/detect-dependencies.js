@@ -62,3 +62,44 @@ test('detect builtin modules', t => {
     t.deepEqual(detectDependencies(code), ['node:fake@latest'])
   }
 })
+
+test('a require of something other than a string is not a dependency', t => {
+  const code = `
+    const one = require(1)
+    const nothing = require(null)
+    const isNumber = require('is-number')
+  `
+  t.deepEqual(detectDependencies(code), ['is-number@latest'])
+})
+
+test('detect requires with a subpath', t => {
+  const code = `
+    const fp = require('lodash@4.17.21/fp')
+    const timeSpan = require('@kikobeats/time-span/src/index.js')
+  `
+  t.deepEqual(detectDependencies(code), ['lodash@4.17.21', '@kikobeats/time-span@latest'])
+})
+
+for (const specifier of [
+  'lodash/../../../../etc/hosts',
+  'lodash@4.17.21/../../secret.js',
+  '@scope/pkg/./index.js',
+  '@scope/pkg@1.0.0/a/../../b',
+  'lodash//fp',
+  'lodash/fp/',
+  './secret.json',
+  '../secret.json',
+  '/etc/hosts',
+  '.'
+]) {
+  test(`a path outside a package is not a dependency: ${specifier}`, t => {
+    const error = t.throws(() => detectDependencies(`const x = require('${specifier}')`))
+    t.is(error.code, 'EDEPENDENCYNAME')
+    t.is(error.dependency, specifier)
+  })
+}
+
+test('an import of a path outside a package is not a dependency', t => {
+  const error = t.throws(() => detectDependencies("import x from 'lodash/../../secret.js'"))
+  t.is(error.code, 'EDEPENDENCYNAME')
+})

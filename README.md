@@ -168,6 +168,8 @@ await isEmoji('🙌') // => true
 await isEmoji('foo') // => false
 ```
 
+A file inside a package goes after the version, the same way as without one: `require('lodash@4.17.21/fp')` installs `lodash@4.17.21` and loads `lodash/fp`. The subpath split applies after a version, a `^` or `~` range, an x-range, or `latest`, so `require('isarray@juliangruber/isarray')` is still a GitHub dependency. A path that leaves the package (`..`, `.`, an empty segment) or a relative or absolute path is a `DependencyNameError`.
+
 The hosted code and its dependencies are bundled into a single file with [esbuild](https://esbuild.github.io/) before execution.
 
 Dependencies are installed into a shared persistent directory and reused across invocations, so only the first call that requires a given package pays the install cost.
