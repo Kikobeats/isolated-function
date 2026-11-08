@@ -53,9 +53,12 @@ const builtins = [
   'zlib'
 ]
 
+const nodeProtocolOnly = ['sqlite', 'test', 'test/reporters']
+
 const isBuiltinModule = moduleName => {
-  if (moduleName.startsWith('node:')) moduleName = moduleName.slice('node:'.length)
-  return builtins.includes(moduleName)
+  const bare = moduleName.startsWith('node:') ? moduleName.slice('node:'.length) : moduleName
+  if (moduleName.startsWith('node:') && nodeProtocolOnly.includes(bare)) return true
+  return builtins.includes(bare)
 }
 
 module.exports = code => {

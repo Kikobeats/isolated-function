@@ -26,9 +26,15 @@ const hostFile = () => {
 }
 
 for (const [label, specifier] of [
-  ['a folded concatenation', file => `'${file.slice(0, 5)}' + '${file.slice(5)}'`],
-  ['a conditional', file => `true ? '${file}' : 'x'`],
-  ['a folded template literal', file => `\`${file.slice(0, 5)}\${'${file.slice(5)}'}\``]
+  [
+    'a folded concatenation',
+    file => `${JSON.stringify(file.slice(0, 5))} + ${JSON.stringify(file.slice(5))}`
+  ],
+  ['a conditional', file => `true ? ${JSON.stringify(file)} : 'x'`],
+  [
+    'a folded template literal',
+    file => `\`\${${JSON.stringify(file.slice(0, 5))}}\${${JSON.stringify(file.slice(5))}}\``
+  ]
 ]) {
   for (const call of ['require', 'import', 'require.resolve', 'module.require']) {
     test(`a ${call} of ${label} is not resolved`, async t => {
@@ -81,6 +87,24 @@ test('a folded builtin is left to the runtime', async t => {
     cwd: __dirname
   })
   t.true(outputFiles[0].text.includes('node:sqlite'))
+})
+
+test('a caller sourcefile cannot skip the literal check', async t => {
+  const file = hostFile()
+  const error = await t.throwsAsync(
+    build({
+      content: "module.exports = () => require('.' + '/secret.json')",
+      cwd: path.dirname(file),
+      esbuild: {
+        stdin: {
+          sourcefile: 'hosted.js',
+          contents: "module.exports = () => require('.' + '/secret.json')",
+          resolveDir: path.dirname(file)
+        }
+      }
+    })
+  )
+  t.true(error.message.includes('string literal'))
 })
 
 test('a computed require from a relative directory is not bundled', async t => {

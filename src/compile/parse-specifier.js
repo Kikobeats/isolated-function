@@ -8,6 +8,11 @@ const VERSION_BEFORE_SUBPATH = /^(?:latest|\*|(?:[\^~])?v?\d[\d.xX*]*(?:-[\w.-]*
 
 const isDrivePrefix = segment => /^[A-Za-z]:/.test(segment)
 
+const isPackageSegment = segment => {
+  const bare = segment.startsWith('@') ? segment.slice(1) : segment
+  return bare !== '' && bare !== '.' && bare !== '..' && !isDrivePrefix(bare)
+}
+
 const isPackagePath = subpath =>
   subpath === '' ||
   subpath
@@ -41,6 +46,7 @@ module.exports = specifier => {
     name === '' ||
     name.startsWith('.') ||
     isDrivePrefix(name) ||
+    !name.split('/').every(isPackageSegment) ||
     UNSAFE_CHARACTERS.test(specifier) ||
     !isPackagePath(parsed.subpath)
   ) {

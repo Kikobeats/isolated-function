@@ -2,7 +2,8 @@
 
 const test = require('ava')
 
-const { detectDependencies } = require('../../src/compile')
+const compile = require('../../src/compile')
+const { detectDependencies } = compile
 
 test('detect requires', t => {
   const code = `
@@ -63,6 +64,15 @@ test('detect builtin modules', t => {
   }
 })
 
+test('a node: protocol builtin is not installed', async t => {
+  t.deepEqual(detectDependencies("const runner = require('node:test')"), [])
+  t.deepEqual(detectDependencies("const reporters = require('node:test/reporters')"), [])
+  t.deepEqual(detectDependencies("const sqlite = require('node:sqlite')"), [])
+  t.deepEqual(detectDependencies("const pkg = require('test')"), ['test@latest'])
+  const { content } = await compile(() => require('node:test'))
+  t.true(content.includes('node:test'))
+})
+
 test('a require of something other than a string is not a dependency', t => {
   const code = `
     const one = require(1)
@@ -98,7 +108,11 @@ for (const specifier of [
   'lodash/C:/secret.json',
   'lodash/c:/secret.json',
   'lodash/C:secret.json',
-  'lodash/c:secret.json'
+  'lodash/c:secret.json',
+  '@scope/../secret',
+  '@scope/..',
+  '@../pkg',
+  '@./pkg'
 ]) {
   test(`a path outside a package is not a dependency: ${specifier}`, t => {
     const error = t.throws(() => detectDependencies(`const x = require('${specifier}')`))

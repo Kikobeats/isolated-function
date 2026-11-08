@@ -43,11 +43,6 @@ const onlyLiteralSpecifiers = (entry, specifiers) => ({
 module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts = {} } = {}) => {
   const entry = path.resolve(cwd, ENTRY)
   return esbuild.build({
-    stdin: {
-      contents: content,
-      resolveDir: path.dirname(entry),
-      sourcefile: ENTRY
-    },
     bundle: true,
     write: false,
     platform: 'node',
@@ -56,6 +51,11 @@ module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts = {} } = 
     nodePaths,
     ...MINIFY,
     ...esbuildOpts,
+    stdin: {
+      contents: content,
+      resolveDir: path.dirname(entry),
+      sourcefile: ENTRY
+    },
     plugins: [
       onlyLiteralSpecifiers(entry, literalSpecifiers(content)),
       ...(esbuildOpts.plugins ?? [])
