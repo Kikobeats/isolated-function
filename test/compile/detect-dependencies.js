@@ -68,9 +68,18 @@ test('a node: protocol builtin is not installed', async t => {
   t.deepEqual(detectDependencies("const runner = require('node:test')"), [])
   t.deepEqual(detectDependencies("const reporters = require('node:test/reporters')"), [])
   t.deepEqual(detectDependencies("const sqlite = require('node:sqlite')"), [])
+  t.deepEqual(detectDependencies("const sea = require('node:sea')"), [])
+  t.deepEqual(detectDependencies("const ffi = require('node:ffi')"), [])
   t.deepEqual(detectDependencies("const pkg = require('test')"), ['test@latest'])
-  const { content } = await compile(() => require('node:test'))
-  t.true(content.includes('node:test'))
+  t.deepEqual(detectDependencies("const pkg = require('ffi')"), ['ffi@latest'])
+  const bundled = await Promise.all([
+    compile(() => require('node:test')),
+    compile(() => require('node:sea')),
+    compile(() => require('node:ffi'))
+  ])
+  t.true(bundled[0].content.includes('node:test'))
+  t.true(bundled[1].content.includes('node:sea'))
+  t.true(bundled[2].content.includes('node:ffi'))
 })
 
 test('a require of something other than a string is not a dependency', t => {

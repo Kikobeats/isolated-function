@@ -1,5 +1,7 @@
 'use strict'
 
+const { builtinModules } = require('module')
+
 const parseDependency = require('./parse-dependency')
 const walkSpecifiers = require('./walk-specifiers')
 
@@ -53,11 +55,19 @@ const builtins = [
   'zlib'
 ]
 
-const nodeProtocolOnly = ['sqlite', 'test', 'test/reporters']
+const bareBuiltins = new Set(builtinModules.filter(name => !name.startsWith('node:')))
+
+const nodeProtocolOnly = new Set([
+  'ffi',
+  ...builtinModules
+    .filter(name => name.startsWith('node:'))
+    .map(name => name.slice('node:'.length))
+    .filter(name => !bareBuiltins.has(name))
+])
 
 const isBuiltinModule = moduleName => {
   const bare = moduleName.startsWith('node:') ? moduleName.slice('node:'.length) : moduleName
-  if (moduleName.startsWith('node:') && nodeProtocolOnly.includes(bare)) return true
+  if (moduleName.startsWith('node:') && nodeProtocolOnly.has(bare)) return true
   return builtins.includes(bare)
 }
 
