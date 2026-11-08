@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.25 (2026-11-08)
+
+
+### Bug Fixes
+
+* subpath requires, and bundle only modules required with a string literal ([#105](https://github.com/Kikobeats/isolated-function/issues/105)) ([71c90cd](https://github.com/Kikobeats/isolated-function/commit/71c90cd48530507b3b2f936b140d6b5211a49448))
+
 ### 0.2.24 (2026-11-02)
 
 
