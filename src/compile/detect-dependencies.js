@@ -1,9 +1,9 @@
 'use strict'
 
-const walk = require('acorn-walk')
-const acorn = require('acorn')
+const { builtinModules } = require('module')
 
 const parseDependency = require('./parse-dependency')
+const walkSpecifiers = require('./walk-specifiers')
 
 // List of built-in Node.js modules
 // https://github.com/sindresorhus/builtin-modules/blob/main/builtin-modules.json
@@ -55,35 +55,27 @@ const builtins = [
   'zlib'
 ]
 
+const bareBuiltins = new Set(builtinModules.filter(name => !name.startsWith('node:')))
+
+const nodeProtocolOnly = new Set([
+  'ffi',
+  ...builtinModules
+    .filter(name => name.startsWith('node:'))
+    .map(name => name.slice('node:'.length))
+    .filter(name => !bareBuiltins.has(name))
+])
+
 const isBuiltinModule = moduleName => {
-  if (moduleName.startsWith('node:')) moduleName = moduleName.slice('node:'.length)
-  return builtins.includes(moduleName)
+  const bare = moduleName.startsWith('node:') ? moduleName.slice('node:'.length) : moduleName
+  if (moduleName.startsWith('node:') && nodeProtocolOnly.has(bare)) return true
+  return builtins.includes(bare)
 }
 
 module.exports = code => {
   const dependencies = new Set()
-
-  // Parse the code into an AST
-  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
-
-  // Traverse the AST to find require and import statements
-  walk.simple(ast, {
-    CallExpression (node) {
-      if (
-        node.callee.name === 'require' &&
-        node.arguments.length === 1 &&
-        node.arguments[0].type === 'Literal'
-      ) {
-        const dependency = node.arguments[0].value
-        if (!isBuiltinModule(dependency)) dependencies.add(parseDependency(dependency))
-      }
-    },
-    ImportDeclaration (node) {
-      const source = node.source.value
-      if (!isBuiltinModule(source)) dependencies.add(parseDependency(source))
-    }
+  walkSpecifiers(code, specifier => {
+    if (!isBuiltinModule(specifier)) dependencies.add(parseDependency(specifier))
   })
-
   return Array.from(dependencies)
 }
 

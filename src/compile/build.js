@@ -1,6 +1,12 @@
 'use strict'
 
 const esbuild = require('esbuild')
+const path = require('path')
+
+const { isBuiltinModule } = require('./detect-dependencies')
+const walkSpecifiers = require('./walk-specifiers')
+
+const ENTRY = 'index.js'
 
 const MINIFY = (() => {
   return process.env.ISOLATED_FUNCTIONS_MINIFY === 'false'
@@ -12,13 +18,31 @@ const MINIFY = (() => {
       }
 })()
 
-module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts } = {}) =>
-  esbuild.build({
-    stdin: {
-      contents: content,
-      resolveDir: cwd,
-      sourcefile: 'index.js'
-    },
+const literalSpecifiers = content => {
+  const specifiers = new Set()
+  walkSpecifiers(content, specifier => specifiers.add(specifier))
+  return specifiers
+}
+
+const isRuntimeModule = specifier => specifier.startsWith('node:') || isBuiltinModule(specifier)
+
+const onlyLiteralSpecifiers = (entry, specifiers) => ({
+  name: 'isolated-function:literal-specifiers',
+  setup (build) {
+    build.onResolve({ filter: /.*/ }, args => {
+      if (args.importer !== entry || specifiers.has(args.path) || isRuntimeModule(args.path)) {
+        return
+      }
+      return {
+        errors: [{ text: `Dependency '${args.path}' must be required with a string literal` }]
+      }
+    })
+  }
+})
+
+module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts = {} } = {}) => {
+  const entry = path.resolve(cwd, ENTRY)
+  return esbuild.build({
     bundle: true,
     write: false,
     platform: 'node',
@@ -26,5 +50,15 @@ module.exports = ({ content, cwd, nodePaths = [], esbuild: esbuildOpts } = {}) =
     target: 'node24',
     nodePaths,
     ...MINIFY,
-    ...esbuildOpts
+    ...esbuildOpts,
+    stdin: {
+      contents: content,
+      resolveDir: path.dirname(entry),
+      sourcefile: ENTRY
+    },
+    plugins: [
+      onlyLiteralSpecifiers(entry, literalSpecifiers(content)),
+      ...(esbuildOpts.plugins ?? [])
+    ]
   })
+}
