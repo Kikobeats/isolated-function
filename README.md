@@ -168,7 +168,7 @@ await isEmoji('🙌') // => true
 await isEmoji('foo') // => false
 ```
 
-A file inside a package goes after the version, the same way as without one: `require('lodash@4.17.21/fp')` installs `lodash@4.17.21` and loads `lodash/fp`. The subpath split applies after a version, a `^` or `~` range, an x-range, or `latest`, so `require('isarray@juliangruber/isarray')` is still a GitHub dependency. A path that leaves the package (`..`, `.`, an empty segment) or a relative or absolute path is a `DependencyNameError`.
+A file inside a package goes after the version, the same way as without one: `require('lodash@4.17.21/fp')` installs `lodash@4.17.21` and loads `lodash/fp`. The subpath split applies after a version, a `^` or `~` range, an x-range, or `latest`, so `require('isarray@juliangruber/isarray')` is still a GitHub dependency. A path that leaves the package (`..`, `.`, an empty segment) or a relative or absolute path is a `DependencyNameError`. A module is bundled only when its name is a string literal: a computed one, such as `require('lo' + 'dash')`, fails the build, except for Node.js builtins, which resolve at run time under the permission model.
 
 The hosted code and its dependencies are bundled into a single file with [esbuild](https://esbuild.github.io/) before execution.
 
