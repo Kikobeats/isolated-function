@@ -28,8 +28,7 @@ const isRuntimeModule = specifier => specifier.startsWith('node:') || isBuiltinM
 
 const entryFile = cwd => path.resolve(cwd, ENTRY)
 
-const fromEntry = (importer, entry) =>
-  importer === entry || (Boolean(importer) && path.resolve(importer) === entry)
+const fromEntry = (importer, entry) => importer === entry
 
 const onlyLiteralSpecifiers = (entry, specifiers) => ({
   name: 'isolated-function:literal-specifiers',
