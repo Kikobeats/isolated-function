@@ -92,9 +92,13 @@ for (const specifier of [
   '/etc/hosts',
   '.',
   'C:/secret.json',
+  'c:/secret.json',
   'C:secret.json',
+  'c:secret.json',
   'lodash/C:/secret.json',
-  'lodash/C:secret.json'
+  'lodash/c:/secret.json',
+  'lodash/C:secret.json',
+  'lodash/c:secret.json'
 ]) {
   test(`a path outside a package is not a dependency: ${specifier}`, t => {
     const error = t.throws(() => detectDependencies(`const x = require('${specifier}')`))

@@ -4,8 +4,7 @@ const { DependencyNameError } = require('../errors')
 
 const UNSAFE_CHARACTERS = /[\\'"`\s]/
 
-const VERSION_BEFORE_SUBPATH =
-  /^(?:latest|\*|(?:[\^~])?v?\d[\d.xX*]*(?:-[\w.+-]*)?(?:\+[\w.+-]*)?)$/
+const VERSION_BEFORE_SUBPATH = /^(?:latest|\*|(?:[\^~])?v?\d[\d.xX*]*(?:-[\w.-]*)?(?:\+[\w.-]*)?)$/
 
 const isDrivePrefix = segment => /^[A-Za-z]:/.test(segment)
 
