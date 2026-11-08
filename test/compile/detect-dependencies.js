@@ -90,7 +90,11 @@ for (const specifier of [
   './secret.json',
   '../secret.json',
   '/etc/hosts',
-  '.'
+  '.',
+  'C:/secret.json',
+  'C:secret.json',
+  'lodash/C:/secret.json',
+  'lodash/C:secret.json'
 ]) {
   test(`a path outside a package is not a dependency: ${specifier}`, t => {
     const error = t.throws(() => detectDependencies(`const x = require('${specifier}')`))
@@ -125,6 +129,25 @@ for (const [label, code] of [
     t.is(error.code, 'EDEPENDENCYNAME')
   })
 }
+
+test('detect require.resolve and module.require', t => {
+  const code = `
+    const resolved = require.resolve('is-number@1.0.0/index.js')
+    const loaded = module.require('@kikobeats/time-span@1.0.5')
+    const bracket = require['resolve']('is-string')
+    const moduleBracket = module['require']('is-emoji')
+    const template = require[\`resolve\`]('is-odd')
+    const moduleTemplate = module[\`require\`]('is-even')
+  `
+  t.deepEqual(detectDependencies(code), [
+    'is-number@1.0.0',
+    '@kikobeats/time-span@1.0.5',
+    'is-string@latest',
+    'is-emoji@latest',
+    'is-odd@latest',
+    'is-even@latest'
+  ])
+})
 
 test('detect dynamic imports, export-from and template literals', t => {
   const code = `

@@ -89,6 +89,21 @@ test('keeps the subpath after an alias name', t => {
   )
 })
 
+test('keeps a star range subpath and rewrites require.resolve', t => {
+  const code = `
+    const fp = require('lodash@4.*/fp');
+    const resolved = require.resolve('is-number@1.2.3/index.js');
+    const loaded = module.require('is-number@1.2.3/index.js');`
+
+  t.is(
+    transformDependencies(code),
+    `
+    const fp = require('lodash/fp');
+    const resolved = require.resolve('is-number/index.js');
+    const loaded = module.require('is-number/index.js');`
+  )
+})
+
 test('rewrites dynamic imports, export-from and template literals', t => {
   const code = `
     const isNumber = await import('is-number@7.0.0');

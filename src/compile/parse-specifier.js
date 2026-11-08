@@ -4,14 +4,19 @@ const { DependencyNameError } = require('../errors')
 
 const UNSAFE_CHARACTERS = /[\\'"`\s]/
 
-const VERSION_BEFORE_SUBPATH = /^(?:latest|[\^~]?v?\d[\w.+-]*)$/
+const VERSION_BEFORE_SUBPATH =
+  /^(?:latest|\*|(?:[\^~])?v?\d[\d.xX*]*(?:-[\w.+-]*)?(?:\+[\w.+-]*)?)$/
+
+const isDrivePrefix = segment => /^[A-Za-z]:/.test(segment)
 
 const isPackagePath = subpath =>
   subpath === '' ||
   subpath
     .slice(1)
     .split('/')
-    .every(segment => segment !== '' && segment !== '.' && segment !== '..')
+    .every(
+      segment => segment !== '' && segment !== '.' && segment !== '..' && !isDrivePrefix(segment)
+    )
 
 const splitVersion = rest => {
   if (!rest.startsWith('@')) return { version: undefined, subpath: rest }
@@ -36,6 +41,7 @@ module.exports = specifier => {
   if (
     name === '' ||
     name.startsWith('.') ||
+    isDrivePrefix(name) ||
     UNSAFE_CHARACTERS.test(specifier) ||
     !isPackagePath(parsed.subpath)
   ) {

@@ -30,7 +30,7 @@ for (const [label, specifier] of [
   ['a conditional', file => `true ? '${file}' : 'x'`],
   ['a folded template literal', file => `\`${file.slice(0, 5)}\${'${file.slice(5)}'}\``]
 ]) {
-  for (const call of ['require', 'import']) {
+  for (const call of ['require', 'import', 'require.resolve', 'module.require']) {
     test(`a ${call} of ${label} is not resolved`, async t => {
       const file = hostFile()
       const error = await t.throwsAsync(
@@ -81,4 +81,55 @@ test('a folded builtin is left to the runtime', async t => {
     cwd: __dirname
   })
   t.true(outputFiles[0].text.includes('node:sqlite'))
+})
+
+test('a computed require from a relative directory is not bundled', async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'isolated-function-rel-'))
+  fs.writeFileSync(path.join(dir, 'secret.json'), '{"secret":"host"}')
+  const error = await t.throwsAsync(
+    build({
+      content: "module.exports = () => require('.' + '/secret.json')",
+      cwd: path.relative(process.cwd(), dir)
+    })
+  )
+  t.true(error.message.includes('string literal'))
+})
+
+for (const call of [
+  "module.require('acorn-walk').simple",
+  "module['require']('acorn-walk').simple",
+  "module[`require`]('acorn-walk').simple"
+]) {
+  test(`a string literal ${call} is bundled`, async t => {
+    const { outputFiles } = await build({
+      content: `module.exports = () => typeof ${call}`,
+      cwd: path.join(__dirname, '../..')
+    })
+    t.true(outputFiles[0].text.includes('simple'))
+  })
+}
+
+for (const call of [
+  "require.resolve('acorn-walk')",
+  "require['resolve']('acorn-walk')",
+  "require[`resolve`]('acorn-walk')"
+]) {
+  test(`a string literal ${call} is left unresolved`, async t => {
+    const { outputFiles } = await build({
+      content: `module.exports = () => ${call}`,
+      cwd: path.join(__dirname, '../..')
+    })
+    t.true(outputFiles[0].text.includes('acorn-walk'))
+  })
+}
+
+test('a computed require.resolve does not read a host file', async t => {
+  const file = hostFile()
+  const error = await t.throwsAsync(
+    build({
+      content: `module.exports = () => require['res' + 'olve'](${JSON.stringify(file)})`,
+      cwd: __dirname
+    })
+  )
+  t.true(error.message.includes('string literal'))
 })
