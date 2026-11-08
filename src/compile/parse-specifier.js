@@ -2,6 +2,8 @@
 
 const { DependencyNameError } = require('../errors')
 
+const UNSAFE_CHARACTERS = /[\\'"`\s]/
+
 const VERSION_BEFORE_SUBPATH = /^(?:latest|[\^~]?v?\d[\w.+-]*)$/
 
 const isPackagePath = subpath =>
@@ -31,7 +33,12 @@ module.exports = specifier => {
   const end = nameEnd(specifier)
   const name = specifier.slice(0, end)
   const parsed = { name, ...splitVersion(specifier.slice(end)) }
-  if (name === '' || name.startsWith('.') || !isPackagePath(parsed.subpath)) {
+  if (
+    name === '' ||
+    name.startsWith('.') ||
+    UNSAFE_CHARACTERS.test(specifier) ||
+    !isPackagePath(parsed.subpath)
+  ) {
     throw new DependencyNameError(specifier)
   }
   return parsed

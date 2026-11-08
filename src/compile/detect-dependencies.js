@@ -1,9 +1,7 @@
 'use strict'
 
-const walk = require('acorn-walk')
-const acorn = require('acorn')
-
 const parseDependency = require('./parse-dependency')
+const walkSpecifiers = require('./walk-specifiers')
 
 // List of built-in Node.js modules
 // https://github.com/sindresorhus/builtin-modules/blob/main/builtin-modules.json
@@ -62,29 +60,9 @@ const isBuiltinModule = moduleName => {
 
 module.exports = code => {
   const dependencies = new Set()
-
-  // Parse the code into an AST
-  const ast = acorn.parse(code, { ecmaVersion: 2023, sourceType: 'module' })
-
-  // Traverse the AST to find require and import statements
-  walk.simple(ast, {
-    CallExpression (node) {
-      if (
-        node.callee.name === 'require' &&
-        node.arguments.length === 1 &&
-        node.arguments[0].type === 'Literal' &&
-        typeof node.arguments[0].value === 'string'
-      ) {
-        const dependency = node.arguments[0].value
-        if (!isBuiltinModule(dependency)) dependencies.add(parseDependency(dependency))
-      }
-    },
-    ImportDeclaration (node) {
-      const source = node.source.value
-      if (!isBuiltinModule(source)) dependencies.add(parseDependency(source))
-    }
+  walkSpecifiers(code, specifier => {
+    if (!isBuiltinModule(specifier)) dependencies.add(parseDependency(specifier))
   })
-
   return Array.from(dependencies)
 }
 

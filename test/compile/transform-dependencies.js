@@ -88,3 +88,22 @@ test('keeps the subpath after an alias name', t => {
     const six = require('is-number-6.0.0');`
   )
 })
+
+test('rewrites dynamic imports, export-from and template literals', t => {
+  const code = `
+    const isNumber = await import('is-number@7.0.0');
+    export * from 'is-string@1.0.0';
+    export { default as isEmoji } from 'is-standard-emoji@1.0.0';
+    const fp = require(\`lodash@4.17.21/fp\`);
+    const dynamic = await import(\`is-\${name}\`);`
+
+  t.is(
+    transformDependencies(code),
+    `
+    const isNumber = await import('is-number');
+    export * from 'is-string';
+    export { default as isEmoji } from 'is-standard-emoji';
+    const fp = require('lodash/fp');
+    const dynamic = await import(\`is-\${name}\`);`
+  )
+})

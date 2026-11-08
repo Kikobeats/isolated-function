@@ -103,3 +103,55 @@ test('an import of a path outside a package is not a dependency', t => {
   const error = t.throws(() => detectDependencies("import x from 'lodash/../../secret.js'"))
   t.is(error.code, 'EDEPENDENCYNAME')
 })
+
+test('a backslash in a specifier is not a dependency', t => {
+  const error = t.throws(() =>
+    detectDependencies(String.raw`const x = require('lodash@4.17.21/..\\/..\\/secret.json')`)
+  )
+  t.is(error.code, 'EDEPENDENCYNAME')
+  t.is(error.dependency, String.raw`lodash@4.17.21/..\/..\/secret.json`)
+})
+
+for (const [label, code] of [
+  ['dynamic import', "const x = await import('/etc/hosts')"],
+  ['dynamic import with a relative path', "const x = await import('../../secret.json')"],
+  ['export all from', "export * from '/etc/hosts'"],
+  ['export named from', "export { default } from '../secret.json'"],
+  ['template literal require', 'const x = require(`/etc/hosts`)'],
+  ['template literal import', 'const x = await import(`lodash/../../secret.json`)']
+]) {
+  test(`${label} of a path outside a package is not a dependency`, t => {
+    const error = t.throws(() => detectDependencies(code))
+    t.is(error.code, 'EDEPENDENCYNAME')
+  })
+}
+
+test('detect dynamic imports, export-from and template literals', t => {
+  const code = `
+    const isNumber = await import('is-number@7.0.0')
+    export * from 'is-string'
+    export { default as isEmoji } from 'is-standard-emoji@1.0.0'
+    const fp = require(\`lodash@4.17.21/fp\`)
+    const dynamic = await import(\`is-\${name}\`)
+  `
+  t.deepEqual(detectDependencies(code), [
+    'is-number@7.0.0',
+    'is-string@latest',
+    'is-standard-emoji@1.0.0',
+    'lodash@4.17.21'
+  ])
+})
+
+for (const specifier of [
+  "is-number@1.0.0/a'b",
+  'is-number@1.0.0/a"b',
+  'is-number@1.0.0/a`b',
+  'is-number@^1 || ^2'
+]) {
+  test(`a quote or a space in a specifier is not a dependency: ${specifier}`, t => {
+    const error = t.throws(() =>
+      detectDependencies(`const x = require(${JSON.stringify(specifier)})`)
+    )
+    t.is(error.code, 'EDEPENDENCYNAME')
+  })
+}
