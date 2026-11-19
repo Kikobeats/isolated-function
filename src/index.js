@@ -93,22 +93,15 @@ const isExecutableFile = file => {
   }
 }
 
-// An unset PATH is not an empty one. Node searches `/usr/bin:/bin` when PATH is
-// absent, and an empty entry is the current directory.
-const searchPath = () => {
-  if (process.env.PATH !== undefined) return process.env.PATH
-  return process.platform === 'win32' ? null : '/usr/bin:/bin'
-}
-
 // `exec` and the shell a shebang starts both take a word that starts with `-`
-// as an option. A `./` path, or the absolute file the search would run, is the
-// same command and does not start with `-`.
+// as an option. A `./` path, or the absolute file PATH would run, is the same
+// command. An unset PATH is left for Node to search; an empty entry is the
+// current directory.
 const commandFor = execPath => {
   if (!execPath.startsWith('-')) return execPath
   if (execPath.includes('/')) return `./${execPath}`
-  const listed = searchPath()
-  if (listed === null) return execPath
-  for (const dir of listed.split(path.delimiter)) {
+  if (process.env.PATH === undefined) return execPath
+  for (const dir of process.env.PATH.split(path.delimiter)) {
     const candidate = path.join(dir, execPath)
     if (!isExecutableFile(candidate)) continue
     return path.resolve(candidate)
@@ -118,9 +111,10 @@ const commandFor = execPath => {
 
 const canRun = command => {
   if (command.includes('/')) return isExecutableFile(command)
-  const listed = searchPath()
-  if (listed === null) return true
-  return listed.split(path.delimiter).some(dir => isExecutableFile(path.join(dir, command)))
+  if (process.env.PATH === undefined) return false
+  return process.env.PATH.split(path.delimiter).some(dir =>
+    isExecutableFile(path.join(dir, command))
+  )
 }
 
 const spawn = ({ env, timeout, hasHost, memory, execPath }) => {

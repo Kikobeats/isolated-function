@@ -179,6 +179,10 @@ test.serial('an absent PATH does not run a dashed name from the current director
   })
   const error = await t.throwsAsync(isolatedFunction(() => 'ran', { execPath: '-fn' })())
   t.is(error.code, 'ENOENT')
+  const limited = await t.throwsAsync(
+    isolatedFunction(() => 'ran', { execPath: '-fn', timeout: 10000 })()
+  )
+  t.is(limited.code, 'ENOENT')
 })
 
 test.serial('an empty PATH runs a dashed name from the current directory', async t => {
