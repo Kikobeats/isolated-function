@@ -236,3 +236,20 @@ test.serial('an empty PATH runs a dashed name from the current directory', async
   t.is((await isolatedFunction(() => 'empty', { execPath: '-fn' })()).value, 'empty')
   t.is(readFileSync(marker, 'utf8'), 'empty')
 })
+
+test.serial('an empty PATH runs node from the current directory', async t => {
+  const marker = path.join(process.cwd(), 'empty-path-marker')
+  const fake = path.join(process.cwd(), 'node')
+  writeFileSync(fake, `#!/bin/sh\nprintf cwd > '${marker}'\nexec '${process.execPath}' "$@"\n`)
+  chmodSync(fake, 0o755)
+  const previous = process.env.PATH
+  process.env.PATH = ''
+  t.teardown(() => {
+    if (previous === undefined) delete process.env.PATH
+    else process.env.PATH = previous
+    rmSync(fake, { force: true })
+    rmSync(marker, { force: true })
+  })
+  t.is((await isolatedFunction(() => 'cwd')()).value, 'cwd')
+  t.is(readFileSync(marker, 'utf8'), 'cwd')
+})
