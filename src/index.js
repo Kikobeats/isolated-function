@@ -78,7 +78,7 @@ const hasShell = () =>
     .split(path.delimiter)
     .some(dir => dir && existsSync(path.join(dir, 'sh')))
 
-const spawn = ({ env, timeout, hasHost, memory }) => {
+const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   const limits = []
@@ -92,8 +92,8 @@ const spawn = ({ env, timeout, hasHost, memory }) => {
   // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
   // indistinguishable from the OOM killer.
   if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
-  if (limits.length === 0) return $('node', ['-'], spawnOpts)
-  return $('sh', ['-c', `${limits.join(' && ')} && exec node "$@"`, '_', '-'], spawnOpts)
+  if (limits.length === 0) return $(execPath, ['-'], spawnOpts)
+  return $('sh', ['-c', `${limits.join(' && ')} && exec "$0" "$@"`, execPath, '-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
@@ -136,10 +136,14 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       slot,
       host,
       ssrf,
-      hosts
+      hosts,
+      execPath = 'node'
     } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
+    if (typeof execPath !== 'string' || execPath.length === 0) {
+      throw new TypeError('Expected `execPath` to be a non-empty string')
+    }
     if (hosts !== undefined) {
       if (
         !Array.isArray(hosts) ||
@@ -193,7 +197,8 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
           },
           timeout,
           hasHost,
-          memory
+          memory,
+          execPath
         })
         if (hasHost) attachHost(subprocess, ipcHost, { memory })
         subprocess.stdin?.on('error', () => {})
