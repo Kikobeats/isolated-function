@@ -76,33 +76,56 @@ test('a relative execPath that starts with a dash is the file, not an option', a
   t.is((await isolatedFunction(() => 'limited', { execPath, timeout: 10000 })()).value, 'limited')
 })
 
-test('an execPath on PATH whose name starts with a dash skips entries it cannot run', async t => {
-  const root = mkdtempSync(path.join(tmpdir(), 'isolated-exec-dash-'))
-  t.teardown(() => rmSync(root, { recursive: true, force: true }))
-  const directory = path.join(root, 'directory')
-  const notExecutable = path.join(root, 'not-executable')
-  const runnable = path.join(root, 'runnable')
-  mkdirSync(directory)
-  mkdirSync(path.join(directory, '-fn'))
-  mkdirSync(notExecutable)
-  writeFileSync(path.join(notExecutable, '-fn'), '#!/bin/sh\nexit 1\n')
-  chmodSync(path.join(notExecutable, '-fn'), 0o644)
-  mkdirSync(runnable)
-  const bin = path.join(runnable, '-fn')
-  writeFileSync(bin, '#!/bin/sh\nexec node "$@"\n')
+test.serial(
+  'an execPath on PATH whose name starts with a dash skips entries it cannot run',
+  async t => {
+    const root = mkdtempSync(path.join(tmpdir(), 'isolated-exec-dash-'))
+    t.teardown(() => rmSync(root, { recursive: true, force: true }))
+    const directory = path.join(root, 'directory')
+    const notExecutable = path.join(root, 'not-executable')
+    const runnable = path.join(root, 'runnable')
+    mkdirSync(directory)
+    mkdirSync(path.join(directory, '-fn'))
+    mkdirSync(notExecutable)
+    writeFileSync(path.join(notExecutable, '-fn'), '#!/bin/sh\nexit 1\n')
+    chmodSync(path.join(notExecutable, '-fn'), 0o644)
+    mkdirSync(runnable)
+    const bin = path.join(runnable, '-fn')
+    writeFileSync(bin, '#!/bin/sh\nexec node "$@"\n')
+    chmodSync(bin, 0o755)
+    const previous = process.env.PATH
+    process.env.PATH = [directory, notExecutable, runnable, previous]
+      .filter(Boolean)
+      .join(path.delimiter)
+    t.teardown(() => {
+      process.env.PATH = previous
+    })
+    t.is((await isolatedFunction(() => 'direct', { execPath: '-fn' })()).value, 'direct')
+    t.is(
+      (await isolatedFunction(() => 'limited', { execPath: '-fn', timeout: 10000 })()).value,
+      'limited'
+    )
+  }
+)
+
+test.serial('an empty PATH entry runs the execPath in the current directory', async t => {
+  const marker = path.join(process.cwd(), '-fn-marker')
+  const bin = path.join(process.cwd(), '-fn')
+  const later = mkdtempSync(path.join(tmpdir(), 'isolated-exec-later-'))
+  writeFileSync(bin, `#!/bin/sh\nprintf cwd > '${marker}'\nexec node "$@"\n`)
   chmodSync(bin, 0o755)
+  writeFileSync(path.join(later, '-fn'), `#!/bin/sh\nprintf later > '${marker}'\nexec node "$@"\n`)
+  chmodSync(path.join(later, '-fn'), 0o755)
   const previous = process.env.PATH
-  process.env.PATH = [directory, notExecutable, runnable, previous]
-    .filter(Boolean)
-    .join(path.delimiter)
+  process.env.PATH = ['', later, previous].filter(part => part !== undefined).join(path.delimiter)
   t.teardown(() => {
     process.env.PATH = previous
+    rmSync(bin, { force: true })
+    rmSync(marker, { force: true })
+    rmSync(later, { recursive: true, force: true })
   })
-  t.is((await isolatedFunction(() => 'direct', { execPath: '-fn' })()).value, 'direct')
-  t.is(
-    (await isolatedFunction(() => 'limited', { execPath: '-fn', timeout: 10000 })()).value,
-    'limited'
-  )
+  t.is((await isolatedFunction(() => 'cwd', { execPath: '-fn', timeout: 10000 })()).value, 'cwd')
+  t.is(readFileSync(marker, 'utf8'), 'cwd')
 })
 
 test('execPath is a non-empty string', t => {

@@ -85,12 +85,12 @@ const hasShell = () =>
 
 // `exec` and the shell a shebang starts both take a word that starts with `-`
 // as an option. A `./` path, or the absolute file PATH would run, is the same
-// command and does not start with `-`.
+// command and does not start with `-`. An empty PATH entry is the current
+// directory, and the file handed to `exec` is absolute so its name can be.
 const commandFor = execPath => {
   if (!execPath.startsWith('-')) return execPath
   if (execPath.includes('/')) return `./${execPath}`
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    if (!dir) continue
     const candidate = path.join(dir, execPath)
     try {
       if (!statSync(candidate).isFile()) continue
@@ -98,7 +98,7 @@ const commandFor = execPath => {
     } catch {
       continue
     }
-    return candidate
+    return path.resolve(candidate)
   }
   return execPath
 }
