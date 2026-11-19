@@ -11,10 +11,18 @@ const wrapper = t => {
   const dir = mkdtempSync(path.join(tmpdir(), 'isolated-exec-path-'))
   t.teardown(() => rmSync(dir, { recursive: true, force: true }))
   const marker = path.join(dir, 'marker')
+  const limit = path.join(dir, 'limit')
   const bin = path.join(dir, 'wrapper')
-  writeFileSync(bin, `#!/bin/sh\nprintf '%s\\n' "$@" > '${marker}'\nexec node "$@"\n`)
+  writeFileSync(
+    bin,
+    `#!/bin/sh\nprintf '%s\\n' "$@" > '${marker}'\nulimit -S -t > '${limit}'\nexec node "$@"\n`
+  )
   chmodSync(bin, 0o755)
-  return { bin, args: () => readFileSync(marker, 'utf8').trim().split('\n') }
+  return {
+    bin,
+    args: () => readFileSync(marker, 'utf8').trim().split('\n'),
+    cpu: () => readFileSync(limit, 'utf8').trim()
+  }
 }
 
 test('runs the code through execPath in place of node', async t => {
@@ -25,7 +33,7 @@ test('runs the code through execPath in place of node', async t => {
 })
 
 test('execPath keeps the resource limits, which run before it', async t => {
-  const { bin, args } = wrapper(t)
+  const { bin, args, cpu } = wrapper(t)
   const { value } = await isolatedFunction(() => 'limited', {
     execPath: bin,
     timeout: 10000,
@@ -33,6 +41,7 @@ test('execPath keeps the resource limits, which run before it', async t => {
   })()
   t.is(value, 'limited')
   t.deepEqual(args(), ['-'])
+  t.is(cpu(), '10')
   const error = await t.throwsAsync(
     isolatedFunction(() => new Promise(() => setInterval(() => {}, 1000)), {
       execPath: bin,
