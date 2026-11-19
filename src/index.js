@@ -4,7 +4,12 @@ const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { flattie } = require('flattie')
 const { Readable } = require('node:stream')
-const { existsSync } = require('node:fs')
+const {
+  accessSync,
+  constants: { X_OK },
+  existsSync,
+  statSync
+} = require('node:fs')
 const { rm } = require('fs/promises')
 const path = require('node:path')
 const $ = require('tinyspawn')
@@ -78,6 +83,26 @@ const hasShell = () =>
     .split(path.delimiter)
     .some(dir => dir && existsSync(path.join(dir, 'sh')))
 
+// `exec` and the shell a shebang starts both take a word that starts with `-`
+// as an option. A `./` path, or the absolute file PATH would run, is the same
+// command and does not start with `-`.
+const commandFor = execPath => {
+  if (!execPath.startsWith('-')) return execPath
+  if (execPath.includes('/')) return `./${execPath}`
+  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+    if (!dir) continue
+    const candidate = path.join(dir, execPath)
+    try {
+      if (!statSync(candidate).isFile()) continue
+      accessSync(candidate, X_OK)
+    } catch {
+      continue
+    }
+    return candidate
+  }
+  return execPath
+}
+
 const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
@@ -92,8 +117,9 @@ const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
   // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
   // indistinguishable from the OOM killer.
   if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
-  if (limits.length === 0) return $(execPath, ['-'], spawnOpts)
-  return $('sh', ['-c', `${limits.join(' && ')} && exec "$0" "$@"`, execPath, '-'], spawnOpts)
+  const command = commandFor(execPath)
+  if (limits.length === 0) return $(command, ['-'], spawnOpts)
+  return $('sh', ['-c', `${limits.join(' && ')} && exec "$0" "$@"`, command, '-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {

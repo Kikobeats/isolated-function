@@ -1,6 +1,6 @@
 'use strict'
 
-const { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('fs')
+const { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('fs')
 const { tmpdir } = require('os')
 const path = require('path')
 const test = require('ava')
@@ -60,6 +60,47 @@ test('an execPath with a space in it is one path, not a command line', async t =
   t.is((await isolatedFunction(() => 'direct', { execPath: bin })()).value, 'direct')
   t.is(
     (await isolatedFunction(() => 'limited', { execPath: bin, timeout: 10000 })()).value,
+    'limited'
+  )
+})
+
+test('a relative execPath that starts with a dash is the file, not an option', async t => {
+  const dir = mkdtempSync(path.join(process.cwd(), '-isolated-exec-'))
+  t.teardown(() => rmSync(dir, { recursive: true, force: true }))
+  const bin = path.join(dir, 'wrapper')
+  writeFileSync(bin, '#!/bin/sh\nexec node "$@"\n')
+  chmodSync(bin, 0o755)
+  const execPath = path.relative(process.cwd(), bin)
+  t.true(execPath.startsWith('-'))
+  t.is((await isolatedFunction(() => 'direct', { execPath })()).value, 'direct')
+  t.is((await isolatedFunction(() => 'limited', { execPath, timeout: 10000 })()).value, 'limited')
+})
+
+test('an execPath on PATH whose name starts with a dash skips entries it cannot run', async t => {
+  const root = mkdtempSync(path.join(tmpdir(), 'isolated-exec-dash-'))
+  t.teardown(() => rmSync(root, { recursive: true, force: true }))
+  const directory = path.join(root, 'directory')
+  const notExecutable = path.join(root, 'not-executable')
+  const runnable = path.join(root, 'runnable')
+  mkdirSync(directory)
+  mkdirSync(path.join(directory, '-fn'))
+  mkdirSync(notExecutable)
+  writeFileSync(path.join(notExecutable, '-fn'), '#!/bin/sh\nexit 1\n')
+  chmodSync(path.join(notExecutable, '-fn'), 0o644)
+  mkdirSync(runnable)
+  const bin = path.join(runnable, '-fn')
+  writeFileSync(bin, '#!/bin/sh\nexec node "$@"\n')
+  chmodSync(bin, 0o755)
+  const previous = process.env.PATH
+  process.env.PATH = [directory, notExecutable, runnable, previous]
+    .filter(Boolean)
+    .join(path.delimiter)
+  t.teardown(() => {
+    process.env.PATH = previous
+  })
+  t.is((await isolatedFunction(() => 'direct', { execPath: '-fn' })()).value, 'direct')
+  t.is(
+    (await isolatedFunction(() => 'limited', { execPath: '-fn', timeout: 10000 })()).value,
     'limited'
   )
 })
