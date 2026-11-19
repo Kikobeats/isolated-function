@@ -111,7 +111,10 @@ const commandFor = execPath => {
 
 const canRun = command => {
   if (command.includes('/')) return isExecutableFile(command)
-  if (process.env.PATH === undefined) return false
+  // An unset PATH is Node's default search. A normal name is still started
+  // through the shell so the cpu limit applies; a name that starts with `-`
+  // would be an option to `exec`, so it is spawned directly.
+  if (process.env.PATH === undefined) return !command.startsWith('-')
   return process.env.PATH.split(path.delimiter).some(dir =>
     isExecutableFile(path.join(dir, command))
   )

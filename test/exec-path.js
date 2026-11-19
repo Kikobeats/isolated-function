@@ -1,6 +1,14 @@
 'use strict'
 
-const { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } = require('fs')
+const {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} = require('fs')
 const { tmpdir } = require('os')
 const path = require('path')
 const test = require('ava')
@@ -165,6 +173,29 @@ test('a wrapper that exits 127 is not a missing execPath', async t => {
   t.is(error.exitCode, 127)
   t.not(error.code, 'ENOENT')
 })
+
+test.serial(
+  'an unset PATH still applies the cpu limit when node is on the default search',
+  async t => {
+    const previous = process.env.PATH
+    delete process.env.PATH
+    t.teardown(() => {
+      if (previous === undefined) delete process.env.PATH
+      else process.env.PATH = previous
+    })
+    const onDefault = existsSync('/usr/bin/node') || existsSync('/bin/node')
+    if (!onDefault) {
+      const error = await t.throwsAsync(isolatedFunction(() => 'ran', { timeout: 10000 })())
+      t.is(error.exitCode, 127)
+      return
+    }
+    const { value } = await isolatedFunction(
+      () => require('child_process').execSync('ulimit -S -t', { encoding: 'utf8' }).trim(),
+      { timeout: 10000, allow: { permissions: ['child_process'] } }
+    )()
+    t.is(value, '10')
+  }
+)
 
 test.serial('an absent PATH does not run a dashed name from the current directory', async t => {
   const bin = path.join(process.cwd(), '-fn')
