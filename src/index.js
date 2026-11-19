@@ -83,24 +83,44 @@ const hasShell = () =>
     .split(path.delimiter)
     .some(dir => dir && existsSync(path.join(dir, 'sh')))
 
+const isExecutableFile = file => {
+  try {
+    if (!statSync(file).isFile()) return false
+    accessSync(file, X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// An unset PATH is not an empty one. Node searches `/usr/bin:/bin` when PATH is
+// absent, and an empty entry is the current directory.
+const searchPath = () => {
+  if (process.env.PATH !== undefined) return process.env.PATH
+  return process.platform === 'win32' ? null : '/usr/bin:/bin'
+}
+
 // `exec` and the shell a shebang starts both take a word that starts with `-`
-// as an option. A `./` path, or the absolute file PATH would run, is the same
-// command and does not start with `-`. An empty PATH entry is the current
-// directory, and the file handed to `exec` is absolute so its name can be.
+// as an option. A `./` path, or the absolute file the search would run, is the
+// same command and does not start with `-`.
 const commandFor = execPath => {
   if (!execPath.startsWith('-')) return execPath
   if (execPath.includes('/')) return `./${execPath}`
-  for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
+  const listed = searchPath()
+  if (listed === null) return execPath
+  for (const dir of listed.split(path.delimiter)) {
     const candidate = path.join(dir, execPath)
-    try {
-      if (!statSync(candidate).isFile()) continue
-      accessSync(candidate, X_OK)
-    } catch {
-      continue
-    }
+    if (!isExecutableFile(candidate)) continue
     return path.resolve(candidate)
   }
   return execPath
+}
+
+const canRun = command => {
+  if (command.includes('/')) return isExecutableFile(command)
+  const listed = searchPath()
+  if (listed === null) return true
+  return listed.split(path.delimiter).some(dir => isExecutableFile(path.join(dir, command)))
 }
 
 const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
@@ -118,7 +138,9 @@ const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
   // indistinguishable from the OOM killer.
   if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
   const command = commandFor(execPath)
-  if (limits.length === 0) return $(command, ['-'], spawnOpts)
+  // A missing file must surface as the spawn error. Through `sh`, exec's
+  // failure is only an exit status, and a wrapper can exit with that status too.
+  if (limits.length === 0 || !canRun(command)) return $(command, ['-'], spawnOpts)
   return $('sh', ['-c', `${limits.join(' && ')} && exec "$0" "$@"`, command, '-'], spawnOpts)
 }
 

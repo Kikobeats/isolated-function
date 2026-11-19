@@ -149,4 +149,51 @@ test('execPath is a non-empty string', t => {
 test('a missing execPath fails the run', async t => {
   const error = await t.throwsAsync(isolatedFunction(() => 1, { execPath: '/nonexistent/node' })())
   t.is(error.code, 'ENOENT')
+  const limited = await t.throwsAsync(
+    isolatedFunction(() => 1, { execPath: '/nonexistent/node', timeout: 10000 })()
+  )
+  t.is(limited.code, 'ENOENT')
+})
+
+test('a wrapper that exits 127 is not a missing execPath', async t => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'isolated-exec-exit-'))
+  t.teardown(() => rmSync(dir, { recursive: true, force: true }))
+  const bin = path.join(dir, 'wrapper')
+  writeFileSync(bin, '#!/bin/sh\nexit 127\n')
+  chmodSync(bin, 0o755)
+  const error = await t.throwsAsync(isolatedFunction(() => 1, { execPath: bin, timeout: 10000 })())
+  t.is(error.exitCode, 127)
+  t.not(error.code, 'ENOENT')
+})
+
+test.serial('an absent PATH does not run a dashed name from the current directory', async t => {
+  const bin = path.join(process.cwd(), '-fn')
+  writeFileSync(bin, `#!/bin/sh\nexec '${process.execPath}' "$@"\n`)
+  chmodSync(bin, 0o755)
+  const previous = process.env.PATH
+  delete process.env.PATH
+  t.teardown(() => {
+    if (previous === undefined) delete process.env.PATH
+    else process.env.PATH = previous
+    rmSync(bin, { force: true })
+  })
+  const error = await t.throwsAsync(isolatedFunction(() => 'ran', { execPath: '-fn' })())
+  t.is(error.code, 'ENOENT')
+})
+
+test.serial('an empty PATH runs a dashed name from the current directory', async t => {
+  const marker = path.join(process.cwd(), '-fn-marker')
+  const bin = path.join(process.cwd(), '-fn')
+  writeFileSync(bin, `#!/bin/sh\nprintf empty > '${marker}'\nexec '${process.execPath}' "$@"\n`)
+  chmodSync(bin, 0o755)
+  const previous = process.env.PATH
+  process.env.PATH = ''
+  t.teardown(() => {
+    if (previous === undefined) delete process.env.PATH
+    else process.env.PATH = previous
+    rmSync(bin, { force: true })
+    rmSync(marker, { force: true })
+  })
+  t.is((await isolatedFunction(() => 'empty', { execPath: '-fn' })()).value, 'empty')
+  t.is(readFileSync(marker, 'utf8'), 'empty')
 })
