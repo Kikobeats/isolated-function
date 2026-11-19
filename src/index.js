@@ -83,6 +83,9 @@ const hasShell = () =>
     .split(path.delimiter)
     .some(dir => dir && existsSync(path.join(dir, 'sh')))
 
+// Node's own default when PATH is absent. The shell's default also searches `.`.
+const DEFAULT_PATH = '/usr/bin:/bin'
+
 const isExecutableFile = file => {
   try {
     if (!statSync(file).isFile()) return false
@@ -237,7 +240,7 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
           env: {
-            PATH: process.env.PATH,
+            PATH: process.env.PATH === undefined ? DEFAULT_PATH : process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
