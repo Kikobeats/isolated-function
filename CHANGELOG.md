@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### 0.2.26 (2026-11-20)
+
+
+### Features
+
+* run the code through execPath in place of node ([#106](https://github.com/Kikobeats/isolated-function/issues/106)) ([145de8b](https://github.com/Kikobeats/isolated-function/commit/145de8bcdc275e7648f6c00e26674899368aae41))
+
 ### 0.2.25 (2026-11-08)
 
 
