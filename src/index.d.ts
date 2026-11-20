@@ -130,6 +130,8 @@ export interface IsolatedFunctionOptions {
   memory?: number
   /** When false, returns the error instead of throwing it */
   throwError?: boolean
+  /** Executable that runs in place of `node`, given the same arguments and environment. Use it to start the code through a wrapper, such as one that switches to another user. Defaults to `node` from `PATH`. */
+  execPath?: string
   /** Configuration for allowed permissions and dependencies */
   allow?: AllowOptions
   /**

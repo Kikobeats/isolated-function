@@ -4,7 +4,12 @@ const { deserializeError, serializeError } = require('serialize-error')
 const timeSpan = require('@kikobeats/time-span')()
 const { flattie } = require('flattie')
 const { Readable } = require('node:stream')
-const { existsSync } = require('node:fs')
+const {
+  accessSync,
+  constants: { X_OK },
+  existsSync,
+  statSync
+} = require('node:fs')
 const { rm } = require('fs/promises')
 const path = require('node:path')
 const $ = require('tinyspawn')
@@ -78,7 +83,47 @@ const hasShell = () =>
     .split(path.delimiter)
     .some(dir => dir && existsSync(path.join(dir, 'sh')))
 
-const spawn = ({ env, timeout, hasHost, memory }) => {
+// Node's own default when PATH is absent. The shell's default also searches `.`.
+const DEFAULT_PATH = '/usr/bin:/bin'
+
+const isExecutableFile = file => {
+  try {
+    if (!statSync(file).isFile()) return false
+    accessSync(file, X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// `exec` and the shell a shebang starts both take a word that starts with `-`
+// as an option. A `./` path, or the absolute file PATH would run, is the same
+// command. An unset PATH is left for Node to search; an empty entry is the
+// current directory.
+const commandFor = execPath => {
+  if (!execPath.startsWith('-')) return execPath
+  if (execPath.includes('/')) return `./${execPath}`
+  if (process.env.PATH === undefined) return execPath
+  for (const dir of process.env.PATH.split(path.delimiter)) {
+    const candidate = path.join(dir, execPath)
+    if (!isExecutableFile(candidate)) continue
+    return path.resolve(candidate)
+  }
+  return execPath
+}
+
+const canRun = command => {
+  if (command.includes('/')) return isExecutableFile(command)
+  // An unset PATH is Node's default search. A normal name is still started
+  // through the shell so the cpu limit applies; a name that starts with `-`
+  // would be an option to `exec`, so it is spawned directly.
+  if (process.env.PATH === undefined) return !command.startsWith('-')
+  return process.env.PATH.split(path.delimiter).some(dir =>
+    isExecutableFile(path.join(dir, command))
+  )
+}
+
+const spawn = ({ env, timeout, hasHost, memory, execPath }) => {
   const spawnOpts = { env, timeout, killSignal: 'SIGKILL' }
   if (hasHost) spawnOpts.stdio = ['pipe', 'pipe', 'pipe', 'ipc']
   const limits = []
@@ -92,8 +137,11 @@ const spawn = ({ env, timeout, hasHost, memory }) => {
   // Soft limit only. An equal hard limit makes Linux send SIGKILL, which is
   // indistinguishable from the OOM killer.
   if (Number.isFinite(timeout)) limits.push(`ulimit -S -t ${Math.ceil(timeout / 1000)}`)
-  if (limits.length === 0) return $('node', ['-'], spawnOpts)
-  return $('sh', ['-c', `${limits.join(' && ')} && exec node "$@"`, '_', '-'], spawnOpts)
+  const command = commandFor(execPath)
+  // A missing file must surface as the spawn error. Through `sh`, exec's
+  // failure is only an exit status, and a wrapper can exit with that status too.
+  if (limits.length === 0 || !canRun(command)) return $(command, ['-'], spawnOpts)
+  return $('sh', ['-c', `${limits.join(' && ')} && exec "$0" "$@"`, command, '-'], spawnOpts)
 }
 
 module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
@@ -136,10 +184,14 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
       slot,
       host,
       ssrf,
-      hosts
+      hosts,
+      execPath = 'node'
     } = {}
   ) => {
     if (!['function', 'string'].includes(typeof snippet)) throw new TypeError('Expected a function')
+    if (typeof execPath !== 'string' || execPath.length === 0) {
+      throw new TypeError('Expected `execPath` to be a non-empty string')
+    }
     if (hosts !== undefined) {
       if (
         !Array.isArray(hosts) ||
@@ -188,12 +240,13 @@ module.exports = ({ tmpdir, nodePaths, esbuild } = {}) => {
         const spawnElapsed = timeSpan()
         const subprocess = spawn({
           env: {
-            PATH: process.env.PATH,
+            PATH: process.env.PATH === undefined ? DEFAULT_PATH : process.env.PATH,
             NODE_OPTIONS: flags({ memory, permissions })
           },
           timeout,
           hasHost,
-          memory
+          memory,
+          execPath
         })
         if (hasHost) attachHost(subprocess, ipcHost, { memory })
         subprocess.stdin?.on('error', () => {})

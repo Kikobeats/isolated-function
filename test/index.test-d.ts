@@ -174,3 +174,5 @@ expectType<IsolatedFn>(
     ssrf: (address, port) => address === '1.1.1.1' && (port === 443 || port === '443')
   })
 )
+
+isolatedFunction(() => 1, { execPath: '/usr/local/bin/as-fn' })

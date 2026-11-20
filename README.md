@@ -407,6 +407,21 @@ Default: `Infinity`
 
 Set the function memory limit, in megabytes. This bounds the V8 heap. On Linux, when `sh` is on `PATH`, it also sets a virtual-memory ceiling above that limit. With [host](#host) or `ssrf` set, it also bounds what the host keeps for the run.
 
+#### execPath
+
+Type: `string`<br>
+Default: `'node'`
+
+The executable that runs the code in place of `node`. It gets the same arguments, environment and file descriptors `node` would, including the IPC channel of [host](#host), and the [memory](#memory) and [timeout](#timeout) limits apply to it. It must end up running Node.js, as `node` would.
+
+Use it to start the code through a wrapper, for example a setuid helper that switches to an unprivileged user before it executes `node`, so code that escapes the permission model still cannot read or signal the host process:
+
+```js
+const fn = isolatedFunction(code, { execPath: '/usr/local/bin/as-fn' })
+```
+
+When the host kills a run (`timeout`), it signals the process it spawned. A wrapper that switches users has to make sure that signal still ends the code.
+
 #### throwError
 
 Type: `boolean`<br>
